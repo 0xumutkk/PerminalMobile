@@ -1,7 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { View, StyleSheet, Dimensions, Text } from "react-native";
-import { LineChart, useLineChart } from "react-native-wagmi-charts";
-import * as Haptics from "expo-haptics";
+import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { type ChartPoint } from "../lib/mock-data";
 
 export interface MarketChartNativeProps {
@@ -9,36 +8,13 @@ export interface MarketChartNativeProps {
     color?: string;
 }
 
-function ChartContent({ color }: { color: string }) {
-    const { currentIndex } = useLineChart();
-
-    useEffect(() => {
-        if (currentIndex.value !== -1) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-    }, [currentIndex]);
-
-    return (
-        <>
-            <LineChart.Path color={color} width={2.5}>
-                <LineChart.Gradient color={color} />
-            </LineChart.Path>
-            <LineChart.CursorCrosshair color="#fff">
-                <LineChart.Tooltip
-                    textStyle={styles.tooltipText}
-                    cursorGutter={10}
-                />
-                <LineChart.PriceText
-                    style={styles.priceText}
-                    format={({ value }) => `${Math.round(Number(value) * 100)}%`}
-                />
-            </LineChart.CursorCrosshair>
-        </>
-    );
-}
-
+/** Simple SVG line chart compatible with Expo Go (no wagmi-charts / reanimated). */
 export function MarketChartNative({ data, color = "#10b981" }: MarketChartNativeProps) {
     const chartWidth = Dimensions.get("window").width - 32;
+    const chartHeight = 200;
+    const padding = { top: 12, right: 12, bottom: 12, left: 12 };
+    const innerWidth = chartWidth - padding.left - padding.right;
+    const innerHeight = chartHeight - padding.top - padding.bottom;
 
     if (!data || data.length === 0) {
         return (
@@ -48,13 +24,50 @@ export function MarketChartNative({ data, color = "#10b981" }: MarketChartNative
         );
     }
 
+    const values = data.map((d) => d.value);
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const range = maxVal - minVal || 1;
+    const n = data.length;
+
+    const points = data.map((d, i) => {
+        const x = padding.left + (i / Math.max(n - 1, 1)) * innerWidth;
+        const y = padding.top + innerHeight - ((d.value - minVal) / range) * innerHeight;
+        return { x, y };
+    });
+
+    const pathD = points
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+        .join(" ");
+    const areaD = `${pathD} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${points[0].x} ${padding.top + innerHeight} Z`;
+
     return (
         <View style={styles.container}>
-            <LineChart.Provider data={data}>
-                <LineChart width={chartWidth} height={220}>
-                    <ChartContent color={color} />
-                </LineChart>
-            </LineChart.Provider>
+            <Svg width={chartWidth} height={chartHeight}>
+                <Defs>
+                    <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0" stopColor={color} stopOpacity={0.3} />
+                        <Stop offset="1" stopColor={color} stopOpacity={0} />
+                    </LinearGradient>
+                </Defs>
+                <Path d={areaD} fill="url(#chartGradient)" />
+                <Path
+                    d={pathD}
+                    stroke={color}
+                    strokeWidth={2.5}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </Svg>
+            <View style={styles.labelRow}>
+                <Text style={styles.labelSubtext}>
+                    Start <Text style={[styles.labelText, { color }]}>{Math.round((data[0]?.value ?? 0) * 100)}%</Text>
+                </Text>
+                <Text style={styles.labelSubtext}>
+                    Now <Text style={[styles.labelText, { color }]}>{Math.round((data[data.length - 1]?.value ?? 0) * 100)}%</Text>
+                </Text>
+            </View>
         </View>
     );
 }
@@ -79,18 +92,21 @@ const styles = StyleSheet.create({
         color: "#6b7280",
         fontSize: 14,
     },
-    tooltipText: {
-        color: "#fff",
-        backgroundColor: "#000",
-        borderRadius: 4,
-        fontSize: 12,
-        fontWeight: "bold",
-        padding: 4,
+    labelRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        paddingHorizontal: 16,
+        marginTop: 8,
+        gap: 8,
     },
-    priceText: {
-        color: "#fff",
-        fontSize: 24,
+    labelText: {
+        fontSize: 16,
         fontWeight: "bold",
-        marginBottom: 4,
+    },
+    labelSubtext: {
+        fontSize: 12,
+        color: "#6b7280",
     },
 });

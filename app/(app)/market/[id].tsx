@@ -1,22 +1,69 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeft, Share2, Info, TrendingUp, Users, Calendar } from "lucide-react-native";
-import { MOCK_MARKETS } from "../../../lib/mock-data";
+import type { Market } from "../../../lib/mock-data";
+import { fetchMarketForApp, fetchDflowMarketCandlesticks } from "../../../lib/dflow";
 import { MarketChartNative } from "../../../components/MarketChartNative";
 import { Image } from "expo-image";
 
 function MarketDetailScreen() {
-    const { id } = useLocalSearchParams();
+    const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
-    const market = MOCK_MARKETS.find((m) => m.id === id);
+    const [market, setMarket] = useState<Market | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    if (!market) {
+    useEffect(() => {
+        if (!id) {
+            setLoading(false);
+            setError("Invalid market");
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+        fetchMarketForApp(id)
+            .then((m) => {
+                if (cancelled) return;
+                if (!m) {
+                    setError("Market not found");
+                    return;
+                }
+                const ticker = m.ticker ?? m.id;
+                return fetchDflowMarketCandlesticks(ticker)
+                    .then((history) => {
+                        if (!cancelled) setMarket({ ...m, priceHistory: history.length ? history : m.priceHistory ?? [] });
+                    })
+                    .catch(() => {
+                        if (!cancelled) setMarket({ ...m, priceHistory: m.priceHistory ?? [] });
+                    });
+            })
+            .catch((e) => {
+                if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [id]);
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.centered]}>
+                <StatusBar style="light" />
+                <ActivityIndicator size="large" color="#a855f7" />
+                <Text style={styles.loadingText}>Loading market...</Text>
+            </View>
+        );
+    }
+
+    if (error || !market) {
         return (
             <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>Market not found</Text>
+                <Text style={styles.errorText}>{error ?? "Market not found"}</Text>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Text style={styles.backButtonText}>Go Back</Text>
                 </TouchableOpacity>
@@ -26,7 +73,10 @@ function MarketDetailScreen() {
 
     const yesPercent = Math.round(market.yesPrice * 100);
     const noPercent = 100 - yesPercent;
-    const isUp = market.priceHistory[market.priceHistory.length - 1].value >= market.priceHistory[0].value;
+    const priceHistory = market.priceHistory ?? [];
+    const isUp = priceHistory.length >= 2
+        ? priceHistory[priceHistory.length - 1].value >= priceHistory[0].value
+        : true;
     const chartColor = isUp ? "#10b981" : "#ef4444";
 
     const handleTrade = (side: string) => {
@@ -60,7 +110,9 @@ function MarketDetailScreen() {
                 </View>
 
                 {/* Chart Section */}
-                <MarketChartNative data={market.priceHistory} color={chartColor} />
+                {priceHistory.length > 0 && (
+                    <MarketChartNative data={priceHistory} color={chartColor} />
+                )}
 
                 {/* Stats Grid */}
                 <View style={styles.statsGrid}>
@@ -118,6 +170,15 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#000",
+    },
+    centered: {
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    loadingText: {
+        color: "#666",
+        marginTop: 12,
+        fontSize: 14,
     },
     header: {
         flexDirection: "row",

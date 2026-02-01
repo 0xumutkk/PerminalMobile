@@ -11,18 +11,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
-import { MOCK_MARKETS } from "../../lib/mock-data";
-import type { Market, MarketCategory } from "../../lib/mock-data";
+import type { Market } from "../../lib/mock-data";
+import { fetchMarketsForApp } from "../../lib/dflow";
 import { MarketCardNative } from "../../components/MarketCardNative";
 import { getSolBalance, getSolPriceUsd, getUsdcBalance } from "../../lib/solana";
-import { LayoutGrid, Gift, DollarSign, Flame, Building2, Trophy, Bitcoin } from "lucide-react-native";
-
-const CATEGORY_FILTERS: { key: "Popular" | MarketCategory; label: string; icon: typeof Flame }[] = [
-    { key: "Popular", label: "Popular", icon: Flame },
-    { key: "Politics", label: "Politics", icon: Building2 },
-    { key: "Sports", label: "Sports", icon: Trophy },
-    { key: "Crypto", label: "Crypto", icon: Bitcoin },
-];
+import { LayoutGrid, Gift, DollarSign, Flame, Tag } from "lucide-react-native";
 
 function shortenAddress(address: string, chars = 4): string {
     if (!address || address.length < chars * 2 + 2) return address;
@@ -58,7 +51,8 @@ export default function HomeFeed() {
     const [solPriceUsd, setSolPriceUsd] = useState<number | null>(null);
     const [balanceLoading, setBalanceLoading] = useState(false);
     const [balanceError, setBalanceError] = useState<string | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<"Popular" | MarketCategory>("Popular");
+    const [selectedCategory, setSelectedCategory] = useState<string>("Popular");
+    const [categories, setCategories] = useState<string[]>([]);
 
     useEffect(() => {
         if (!primaryAddress) {
@@ -96,15 +90,40 @@ export default function HomeFeed() {
         };
     }, [primaryAddress]);
 
+    const [markets, setMarkets] = useState<Market[]>([]);
+    const [marketsLoading, setMarketsLoading] = useState(true);
+    const [marketsError, setMarketsError] = useState<string | null>(null);
+    useEffect(() => {
+        let c = false;
+        setMarketsLoading(true);
+        setMarketsError(null);
+        fetchMarketsForApp({ limit: 100, sort: "volume" })
+            .then(({ markets: list, categories: cats }) => {
+                if (!c) {
+                    setMarkets(list);
+                    setCategories(cats);
+                }
+            })
+            .catch((e) => {
+                if (!c) {
+                    setMarketsError(e instanceof Error ? e.message : "Failed to load markets");
+                    setMarkets([]);
+                    setCategories([]);
+                }
+            })
+            .finally(() => { if (!c) setMarketsLoading(false); });
+        return () => { c = true; };
+    }, []);
+
     const solUsdValue =
         solBalance != null && solPriceUsd != null ? solBalance * solPriceUsd : null;
     const portfolioValue = (solUsdValue ?? 0) + (usdcBalance != null ? usdcBalance : 0);
     const cashValue = usdcBalance != null ? usdcBalance : 0;
 
     const filteredMarkets = useMemo(() => {
-        if (selectedCategory === "Popular") return MOCK_MARKETS;
-        return MOCK_MARKETS.filter((m) => m.category === selectedCategory);
-    }, [selectedCategory]);
+        if (selectedCategory === "Popular") return markets;
+        return markets.filter((m) => m.category === selectedCategory);
+    }, [markets, selectedCategory]);
 
     const headerLabel =
         (user?.id && String(user.id).length < 20
@@ -159,44 +178,37 @@ export default function HomeFeed() {
                 </View>
             </View>
 
-            {/* Category filters */}
+            {/* Category filters: Popular + DFlow categories */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.categoryScroll}
                 style={styles.categoryScrollView}
             >
-                {CATEGORY_FILTERS.map(({ key, label, icon: Icon }) => {
-                    const isSelected = selectedCategory === key;
+                <Pressable
+                    style={[styles.categoryPill, selectedCategory === "Popular" && styles.categoryPillActive]}
+                    onPress={() => setSelectedCategory("Popular")}
+                >
+                    <Flame color={selectedCategory === "Popular" ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} style={styles.categoryIcon} />
+                    <Text style={[styles.categoryPillText, selectedCategory === "Popular" && styles.categoryPillTextActive]}>Popular</Text>
+                </Pressable>
+                {categories.map((cat) => {
+                    const isSelected = selectedCategory === cat;
                     return (
                         <Pressable
-                            key={key}
+                            key={cat}
                             style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                            onPress={() => setSelectedCategory(key)}
+                            onPress={() => setSelectedCategory(cat)}
                         >
-                            <Icon
-                                color={isSelected ? "#fff" : "#9ca3af"}
-                                size={16}
-                                strokeWidth={2}
-                                style={styles.categoryIcon}
-                            />
-                            <Text
-                                style={[
-                                    styles.categoryPillText,
-                                    isSelected && styles.categoryPillTextActive,
-                                ]}
-                            >
-                                {label}
-                            </Text>
+                            <Tag color={isSelected ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} style={styles.categoryIcon} />
+                            <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>{cat}</Text>
                         </Pressable>
                     );
                 })}
             </ScrollView>
 
             <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                    {selectedCategory === "Popular" ? "Popular" : selectedCategory}
-                </Text>
+                <Text style={styles.sectionTitle}>{selectedCategory}</Text>
                 <Text style={styles.viewAll}>View All</Text>
             </View>
         </View>
@@ -211,6 +223,20 @@ export default function HomeFeed() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListHeaderComponent={renderHeader}
+                ListEmptyComponent={
+                    !marketsLoading ? (
+                        <View style={styles.emptyMarkets}>
+                            <Text style={styles.emptyMarketsText}>
+                                {marketsError ?? "No markets available."}
+                            </Text>
+                            {marketsError && (
+                                <Text style={styles.emptyMarketsHint}>
+                                    Check .env: EXPO_PUBLIC_DFLOW_MARKETS_API_URL and EXPO_PUBLIC_DFLOW_API_KEY (pond.dflow.net).
+                                </Text>
+                            )}
+                        </View>
+                    ) : null
+                }
                 showsVerticalScrollIndicator={false}
             />
         </SafeAreaView>
@@ -371,5 +397,21 @@ const styles = StyleSheet.create({
         color: "#a855f7",
         fontSize: 14,
         fontWeight: "600",
+    },
+    emptyMarkets: {
+        paddingVertical: 40,
+        alignItems: "center",
+    },
+    emptyMarketsText: {
+        color: "#e5e7eb",
+        fontSize: 15,
+        textAlign: "center",
+    },
+    emptyMarketsHint: {
+        color: "#6b7280",
+        fontSize: 12,
+        marginTop: 8,
+        textAlign: "center",
+        paddingHorizontal: 24,
     },
 });
