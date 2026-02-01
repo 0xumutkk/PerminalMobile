@@ -2,6 +2,7 @@ import { View } from "react-native";
 import { Tabs } from "expo-router";
 import { Home, ArrowUpCircle, Globe, Search, User } from "lucide-react-native";
 import { StyleSheet, Platform } from "react-native";
+import { ProfileSync } from "../../components/ProfileSync";
 
 const TAB_ICON_SIZE = 22;
 
@@ -22,14 +23,15 @@ function TabIcon({
 
 export default function AppLayout() {
     return (
-        <Tabs
+        <>
+            <ProfileSync />
+            <Tabs
             screenOptions={{
                 headerShown: false,
                 tabBarStyle: styles.tabBar,
                 tabBarActiveTintColor: "#fff",
                 tabBarInactiveTintColor: "#6b7280",
-                tabBarShowLabel: true,
-                tabBarLabelStyle: styles.tabLabel,
+                tabBarShowLabel: false,
                 tabBarIcon: ({ focused }) => null,
                 sceneContainerStyle: styles.sceneContainer,
                 tabBarBackground: () => <View style={styles.tabBarBackground} />,
@@ -86,7 +88,14 @@ export default function AppLayout() {
                     href: null,
                 }}
             />
+            <Tabs.Screen
+                name="profile/[id]"
+                options={{
+                    href: null,
+                }}
+            />
         </Tabs>
+        </>
     );
 }
 
@@ -101,7 +110,7 @@ const styles = StyleSheet.create({
     tabBar: {
         backgroundColor: "rgba(15, 15, 15, 0.95)",
         borderTopWidth: 0,
-        height: Platform.OS === "ios" ? 88 : 64,
+        height: Platform.OS === "ios" ? 72 : 56,
         paddingTop: 8,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
@@ -122,10 +131,5 @@ const styles = StyleSheet.create({
         backgroundColor: "#1f1f1f",
         borderWidth: 1,
         borderColor: "#2a2a2a",
-    },
-    tabLabel: {
-        fontSize: 10,
-        fontWeight: "600",
-        marginBottom: Platform.OS === "ios" ? 0 : 8,
     },
 });

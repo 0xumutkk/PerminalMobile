@@ -3,11 +3,30 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { ArrowLeft, Share2, Info, TrendingUp, Users, Calendar } from "lucide-react-native";
+import { ArrowLeft, Share2, Info, TrendingUp, Users, Calendar, Plus, Minus, ChevronUp } from "lucide-react-native";
 import type { Market } from "../../../lib/mock-data";
 import { fetchMarketForApp, fetchDflowMarketCandlesticks } from "../../../lib/dflow";
 import { MarketChartNative } from "../../../components/MarketChartNative";
 import { Image } from "expo-image";
+
+type TabKey = "position" | "about" | "holders" | "activity";
+
+const POSITION_PLACEHOLDER = {
+    balance: "21.3k",
+    balanceLabel: "No Shares",
+    avgCost: "51¢",
+    todaysReturn: "+$8,322.23",
+    todaysReturnPct: "+98.7%",
+    value: "$21,234.23",
+    totalInvested: "$13,245.12",
+    totalReturn: "+$118,322.23",
+    totalReturnPct: "+2,37K%",
+};
+
+const ACTIVITY_PLACEHOLDER = [
+    { type: "buy" as const, time: "9:41 AM, Nov 17", amount: "$12,234.56", detail: "No Shares @ 51¢" },
+    { type: "sell" as const, time: "9:40 AM, Nov 17", amount: "$12,234.56", detail: null },
+];
 
 function MarketDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,6 +34,7 @@ function MarketDetailScreen() {
     const [market, setMarket] = useState<Market | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<TabKey>("position");
 
     useEffect(() => {
         if (!id) {
@@ -113,6 +133,113 @@ function MarketDetailScreen() {
                 {priceHistory.length > 0 && (
                     <MarketChartNative data={priceHistory} color={chartColor} />
                 )}
+
+                {/* Position / About / Holders / Activity block (chart altı, ~350px) */}
+                <View style={styles.positionBlock}>
+                    <View style={styles.tabRow}>
+                        {(["position", "about", "holders", "activity"] as const).map((tab) => (
+                            <TouchableOpacity
+                                key={tab}
+                                onPress={() => setActiveTab(tab)}
+                                style={styles.tab}
+                            >
+                                <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
+                                    {tab === "position" ? "Position" : tab === "about" ? "About" : tab === "holders" ? "Holders" : "Activity"}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {activeTab === "position" && (
+                        <>
+                            <View style={styles.positionColumns}>
+                                <View style={styles.positionCol}>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Balance</Text>
+                                        <View style={styles.balanceValueRow}>
+                                            <Text style={styles.positionValue}>{POSITION_PLACEHOLDER.balance}</Text>
+                                            <View style={styles.noSharesPill}><Text style={styles.noSharesText}>{POSITION_PLACEHOLDER.balanceLabel}</Text></View>
+                                            <Text style={styles.positionValue}>Shares</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Avg. Cost</Text>
+                                        <Text style={styles.positionValue}>{POSITION_PLACEHOLDER.avgCost}</Text>
+                                    </View>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Today's Return</Text>
+                                        <View style={styles.returnRow}>
+                                            <Text style={[styles.positionValue, styles.positiveText]}>{POSITION_PLACEHOLDER.todaysReturn}</Text>
+                                            <View style={styles.returnPctRow}>
+                                                <ChevronUp color="#10b981" size={14} strokeWidth={2.5} />
+                                                <Text style={[styles.positionValue, styles.positiveText]}>{POSITION_PLACEHOLDER.todaysReturnPct}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                                <View style={styles.positionCol}>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Value</Text>
+                                        <Text style={styles.positionValue}>{POSITION_PLACEHOLDER.value}</Text>
+                                    </View>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Total Invested</Text>
+                                        <Text style={styles.positionValue}>{POSITION_PLACEHOLDER.totalInvested}</Text>
+                                    </View>
+                                    <View style={styles.positionRow}>
+                                        <Text style={styles.positionLabel}>Total Return</Text>
+                                        <View style={styles.returnRow}>
+                                            <Text style={[styles.positionValue, styles.positiveText]}>{POSITION_PLACEHOLDER.totalReturn}</Text>
+                                            <View style={styles.returnPctRow}>
+                                                <ChevronUp color="#10b981" size={14} strokeWidth={2.5} />
+                                                <Text style={[styles.positionValue, styles.positiveText]}>{POSITION_PLACEHOLDER.totalReturnPct}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </View>
+                            <Text style={styles.yourActivityTitle}>Your Activity</Text>
+                            {ACTIVITY_PLACEHOLDER.map((item, i) => (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={styles.activityRow}
+                                    onPress={() => handleTrade(item.type === "buy" ? "YES" : "NO")}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[styles.activityIcon, item.type === "buy" ? styles.activityIconBuy : styles.activityIconSell]}>
+                                        {item.type === "buy" ? <Plus color="#fff" size={14} strokeWidth={3} /> : <Minus color="#fff" size={14} strokeWidth={3} />}
+                                    </View>
+                                    <View style={styles.activityContent}>
+                                        <View style={styles.activityTop}>
+                                            <Text style={styles.activityAction}>{item.type === "buy" ? "Buy" : "Sell"}</Text>
+                                            <Text style={styles.activityTime}>{item.time}</Text>
+                                        </View>
+                                        <Text style={styles.activityAmount}>{item.amount}</Text>
+                                        {item.detail ? <Text style={styles.activityDetail}>{item.detail}</Text> : null}
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </>
+                    )}
+
+                    {activeTab === "about" && (
+                        <View style={styles.tabContent}>
+                            <Text style={styles.descriptionText}>{market.description}</Text>
+                        </View>
+                    )}
+
+                    {activeTab === "holders" && (
+                        <View style={styles.tabContent}>
+                            <Text style={styles.placeholderText}>Holders list coming soon</Text>
+                        </View>
+                    )}
+
+                    {activeTab === "activity" && (
+                        <View style={styles.tabContent}>
+                            <Text style={styles.placeholderText}>Activity feed coming soon</Text>
+                        </View>
+                    )}
+                </View>
 
                 {/* Stats Grid */}
                 <View style={styles.statsGrid}>
@@ -247,6 +374,147 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: "bold",
         textTransform: "uppercase",
+    },
+    positionBlock: {
+        width: "100%",
+        minHeight: 350,
+        marginTop: 16,
+        marginBottom: 24,
+        backgroundColor: "#0a0a0a",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#111",
+        padding: 16,
+    },
+    tabRow: {
+        flexDirection: "row",
+        marginBottom: 16,
+        gap: 8,
+    },
+    tab: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    tabLabel: {
+        color: "#6b7280",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    tabLabelActive: {
+        color: "#fff",
+    },
+    positionColumns: {
+        flexDirection: "row",
+        gap: 24,
+    },
+    positionCol: {
+        flex: 1,
+        gap: 12,
+    },
+    positionRow: {
+        gap: 4,
+    },
+    positionLabel: {
+        color: "#6b7280",
+        fontSize: 11,
+        fontWeight: "600",
+        textTransform: "uppercase",
+    },
+    positionValue: {
+        color: "#fff",
+        fontSize: 15,
+        fontWeight: "bold",
+    },
+    balanceValueRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        flexWrap: "wrap",
+    },
+    noSharesPill: {
+        backgroundColor: "#ef4444",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 99,
+    },
+    noSharesText: {
+        color: "#fff",
+        fontSize: 10,
+        fontWeight: "bold",
+    },
+    positiveText: {
+        color: "#10b981",
+    },
+    returnRow: {
+        gap: 4,
+    },
+    returnPctRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    yourActivityTitle: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "bold",
+        marginTop: 20,
+        marginBottom: 12,
+    },
+    activityRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 12,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: "#1a1a1a",
+    },
+    activityIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    activityIconBuy: {
+        backgroundColor: "#10b981",
+    },
+    activityIconSell: {
+        backgroundColor: "#ef4444",
+    },
+    activityContent: {
+        flex: 1,
+    },
+    activityTop: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 2,
+    },
+    activityAction: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    activityTime: {
+        color: "#6b7280",
+        fontSize: 12,
+    },
+    activityAmount: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    activityDetail: {
+        color: "#ef4444",
+        fontSize: 12,
+        marginTop: 2,
+    },
+    tabContent: {
+        paddingVertical: 8,
+    },
+    placeholderText: {
+        color: "#6b7280",
+        fontSize: 14,
     },
     statsGrid: {
         flexDirection: "row",
