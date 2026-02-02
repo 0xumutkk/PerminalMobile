@@ -7,6 +7,9 @@ import {
     ActivityIndicator,
     ScrollView,
     Pressable,
+    Modal,
+    Alert,
+    TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -15,7 +18,9 @@ import type { Market } from "../../lib/mock-data";
 import { fetchMarketsForApp } from "../../lib/dflow";
 import { MarketCardNative } from "../../components/MarketCardNative";
 import { getSolBalance, getSolPriceUsd, getUsdcBalance } from "../../lib/solana";
-import { LayoutGrid, Gift, DollarSign, Flame, Tag } from "lucide-react-native";
+import { LayoutGrid, Gift, DollarSign, Flame, Tag, X } from "lucide-react-native";
+import { TradePanel } from "../../components/market/TradePanel";
+import { TradeSide } from "../../hooks/useTrade";
 
 function shortenAddress(address: string, chars = 4): string {
     if (!address || address.length < chars * 2 + 2) return address;
@@ -53,6 +58,26 @@ export default function HomeFeed() {
     const [balanceError, setBalanceError] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>("Popular");
     const [categories, setCategories] = useState<string[]>([]);
+
+    // Trade Modal state
+    const [showTradePanel, setShowTradePanel] = useState(false);
+    const [tradingMarket, setTradingMarket] = useState<Market | null>(null);
+    const [selectedSide, setSelectedSide] = useState<TradeSide>("YES");
+
+    const handleOpenTrade = (market: Market, side: TradeSide) => {
+        setTradingMarket(market);
+        setSelectedSide(side);
+        setShowTradePanel(true);
+    };
+
+    const handleTradeSuccess = (signature: string) => {
+        Alert.alert("Success", `Trade successful! Signature: ${signature.slice(0, 8)}...`);
+        setShowTradePanel(false);
+        // Refresh balance after trade
+        if (primaryAddress) {
+            getUsdcBalance(primaryAddress).then(setUsdcBalance);
+        }
+    };
 
     useEffect(() => {
         if (!primaryAddress) {
@@ -219,7 +244,13 @@ export default function HomeFeed() {
             <StatusBar style="light" />
             <FlatList
                 data={filteredMarkets}
-                renderItem={({ item }) => <MarketCardNative market={item} />}
+                renderItem={({ item }) => (
+                    <MarketCardNative
+                        market={item}
+                        onBuyYes={() => handleOpenTrade(item, "YES")}
+                        onBuyNo={() => handleOpenTrade(item, "NO")}
+                    />
+                )}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListHeaderComponent={renderHeader}
@@ -237,8 +268,33 @@ export default function HomeFeed() {
                         </View>
                     ) : null
                 }
-                showsVerticalScrollIndicator={false}
             />
+
+            {/* Trade Modal */}
+            <Modal
+                visible={showTradePanel}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowTradePanel(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Trade</Text>
+                            <TouchableOpacity onPress={() => setShowTradePanel(false)} style={styles.closeButton}>
+                                <X color="#fff" size={24} />
+                            </TouchableOpacity>
+                        </View>
+                        {tradingMarket && (
+                            <TradePanel
+                                market={tradingMarket}
+                                onSuccess={handleTradeSuccess}
+                                initialSide={selectedSide}
+                            />
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -413,5 +469,38 @@ const styles = StyleSheet.create({
         marginTop: 8,
         textAlign: "center",
         paddingHorizontal: 24,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "flex-end",
+    },
+    modalContent: {
+        backgroundColor: "#000",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 40,
+        borderTopWidth: 1,
+        borderTopColor: "#333",
+    },
+    modalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    modalTitle: {
+        color: "#fff",
+        fontSize: 20,
+        fontWeight: "bold",
+    },
+    closeButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#222",
+        alignItems: "center",
+        justifyContent: "center",
     },
 });

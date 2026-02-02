@@ -5,12 +5,28 @@ import { useRouter } from "expo-router";
 
 export interface MarketCardNativeProps {
     market: Market;
+    onBuyYes?: (market: Market) => void;
+    onBuyNo?: (market: Market) => void;
 }
 
-export function MarketCardNative({ market }: MarketCardNativeProps) {
+export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNativeProps) {
     const router = useRouter();
     const yesPercent = Math.round(market.yesPrice * 100);
     const noPercent = 100 - yesPercent;
+
+    const handleBuyYes = (e: any) => {
+        if (onBuyYes) {
+            e.stopPropagation();
+            onBuyYes(market);
+        }
+    };
+
+    const handleBuyNo = (e: any) => {
+        if (onBuyNo) {
+            e.stopPropagation();
+            onBuyNo(market);
+        }
+    };
 
     // Format volume
     const formattedVolume =
@@ -90,12 +106,18 @@ export function MarketCardNative({ market }: MarketCardNativeProps) {
 
             {/* Quick Trade Buttons */}
             <View style={styles.buttonRow}>
-                <View style={[styles.tradeButton, styles.yesButton]}>
+                <Pressable
+                    style={({ pressed }) => [styles.tradeButton, styles.yesButton, pressed && { opacity: 0.7 }]}
+                    onPress={handleBuyYes}
+                >
                     <Text style={styles.yesButtonText}>Buy Yes {yesPercent}¢</Text>
-                </View>
-                <View style={[styles.tradeButton, styles.noButton]}>
+                </Pressable>
+                <Pressable
+                    style={({ pressed }) => [styles.tradeButton, styles.noButton, pressed && { opacity: 0.7 }]}
+                    onPress={handleBuyNo}
+                >
                     <Text style={styles.noButtonText}>Buy No {noPercent}¢</Text>
-                </View>
+                </Pressable>
             </View>
         </Pressable>
     );

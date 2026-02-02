@@ -1,138 +1,195 @@
-import React from "react";
-import { Text, View, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
-import { usePrivy, useLoginWithOAuth, hasError } from "@privy-io/expo";
+import React, { useEffect } from "react";
+import { Text, View, TouchableOpacity, StyleSheet, Image, Platform } from "react-native";
+import { usePrivy, useLoginWithOAuth } from "@privy-io/expo";
 import { StatusBar } from "expo-status-bar";
 import { Redirect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-function UnauthenticatedView() {
-    const { login, state: loginState } = useLoginWithOAuth({
-        onError: (error) => {
-            console.error("OAuth login error:", error);
-        },
-    });
+// Simple icons
+const AppleIcon = () => (
+    <View style={{ marginRight: 8 }}>
+        <Text style={{ fontSize: 20 }}></Text>
+    </View>
+);
 
-    const handleLogin = async () => {
+function LoginButtons({ disabled }: { disabled: boolean }) {
+    const { login } = useLoginWithOAuth();
+
+    const handleLogin = async (provider: "google" | "apple" | "twitter" | "discord" | "tiktok" | "linkedin" | "spotify" | "instagram") => {
         try {
-            await login({ provider: "google" });
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error("Login error:", message);
+            await login({ provider });
+        } catch (err) {
+            console.error(`Login with ${provider} failed:`, err);
         }
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>PERMINAL</Text>
-                <Text style={styles.subtitle}>Mobile Terminal for Solana</Text>
-            </View>
-
-            <TouchableOpacity
-                onPress={handleLogin}
-                style={styles.button}
-                disabled={loginState.status === "loading"}
-            >
-                <Text style={styles.buttonText}>
-                    {loginState.status === "loading" ? "Connecting..." : "Login with Google"}
-                </Text>
-            </TouchableOpacity>
-
-            {hasError(loginState) && loginState.error && (
-                <Text style={styles.errorText}>{loginState.error.message}</Text>
+        <View style={styles.buttonContainer}>
+            {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                    onPress={() => handleLogin("apple")}
+                    style={[styles.button, styles.appleButton, disabled && styles.buttonDisabled]}
+                    disabled={disabled}
+                    activeOpacity={0.8}
+                >
+                    <AppleIcon />
+                    <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+                </TouchableOpacity>
             )}
 
-            <Text style={styles.terms}>
-                By continuing, you agree to our Terms and Conditions.
-            </Text>
-        </ScrollView>
+            <TouchableOpacity
+                onPress={() => handleLogin("google")}
+                style={[styles.button, styles.googleButton, disabled && styles.buttonDisabled]}
+                disabled={disabled}
+                activeOpacity={0.8}
+            >
+                <Image
+                    source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" }}
+                    style={{ width: 18, height: 18, marginRight: 8 }}
+                    resizeMode="contain"
+                />
+                {/* Better: Custom view for G if image fails */}
+                <View style={styles.googleIconContainer}>
+                    <Text style={styles.googleIconText}>G</Text>
+                </View>
+                <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+        </View>
     );
 }
 
 export default function LoginScreen() {
-    const { isReady, user, error: privyError, logout } = usePrivy();
+    const { isReady, user } = usePrivy();
 
     if (isReady && user) {
         return <Redirect href="/(app)" />;
     }
 
-    if (privyError) {
-        return (
-            <View style={[styles.container, { padding: 40 }]}>
-                <StatusBar style="light" />
-                <Text style={{ color: "#ff4444", fontSize: 24, fontWeight: "bold", textAlign: "center" }}>SDK Error</Text>
-                <Text style={{ color: "#ccc", marginTop: 10, textAlign: "center" }}>{privyError.message}</Text>
-                <TouchableOpacity onPress={() => logout()} style={[styles.button, { marginTop: 30, backgroundColor: "#441111" }]}>
-                    <Text style={{ color: "#fff" }}>Reset Session</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    if (!isReady) {
-        return (
-            <View style={styles.container}>
-                <StatusBar style="light" />
-                <Text style={styles.subtitle}>Initializing...</Text>
-            </View>
-        );
-    }
+    const logoSource = require("../assets/logo.png");
 
     return (
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
-            <UnauthenticatedView />
-        </View>
+
+            <View style={styles.content}>
+                {/* Logo Section */}
+                <View style={styles.logoSection}>
+                    <Image
+                        source={logoSource}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                </View>
+
+                {/* Text Section */}
+                <View style={styles.textSection}>
+                    <Text style={styles.headline}>
+                        Start trading everything with your friends.
+                    </Text>
+                </View>
+
+                {/* Login Buttons */}
+                <LoginButtons disabled={!isReady} />
+
+                {/* Footer */}
+                <View style={styles.footer}>
+                    <Text style={styles.termsText}>
+                        By signing up, you agree to our Terms of Service and Privacy Policy.
+                    </Text>
+                </View>
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        flexGrow: 1,
-        backgroundColor: "#000",
-        alignItems: "center",
+        flex: 1,
+        backgroundColor: "#000", // Dark background
+    },
+    content: {
+        flex: 1,
+        paddingHorizontal: 24,
+        justifyContent: "space-between",
+        paddingBottom: 20,
+    },
+    logoSection: {
+        marginTop: 60, // Top spacing
+        alignItems: "flex-start",
+    },
+    logo: {
+        width: 80,
+        height: 80,
+    },
+    textSection: {
+        flex: 1,
         justifyContent: "center",
-        padding: 24,
+        marginBottom: 40,
     },
-    header: {
-        alignItems: "center",
-        marginBottom: 48,
-    },
-    title: {
-        color: "#fff",
-        fontSize: 32,
+    headline: {
+        fontSize: 34,
         fontWeight: "bold",
-        textAlign: "center",
+        color: "#fff", // White text
+        lineHeight: 42,
+        letterSpacing: -0.5,
     },
-    subtitle: {
-        color: "#9ca3af",
-        fontSize: 16,
-        marginTop: 8,
-        textAlign: "center",
+    buttonContainer: {
+        gap: 12,
+        marginBottom: 24,
     },
     button: {
-        backgroundColor: "#fff",
-        paddingHorizontal: 32,
-        paddingVertical: 16,
-        borderRadius: 9999,
-        width: "100%",
+        flexDirection: "row",
         alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 30, // Pill shape
+        borderWidth: 1,
+        width: "100%",
     },
-    buttonText: {
-        color: "#000",
-        fontSize: 18,
+    buttonDisabled: {
+        opacity: 0.6,
+    },
+    appleButton: {
+        backgroundColor: "#fff", // White button
+        borderColor: "#fff",
+    },
+    appleButtonText: {
+        color: "#000", // Black text
+        fontSize: 17,
         fontWeight: "600",
+        marginLeft: 8,
     },
-    terms: {
-        color: "#6b7280",
+    googleButton: {
+        backgroundColor: "#1a1a1a", // Dark gray
+        borderColor: "#333", // Subtle border
+    },
+    googleButtonText: {
+        color: "#fff", // White text
+        fontSize: 17,
+        fontWeight: "600",
+        marginLeft: 8,
+    },
+    googleIconContainer: {
+        // Simple G icon placeholder if image fails loading or for layout
+        position: 'absolute',
+        left: 24,
+        opacity: 0, // Hidden if using image, specifically managed via Image component above
+    },
+    googleIconText: {
+        color: "#fff",
+        fontSize: 18,
+        fontWeight: "bold"
+    },
+    footer: {
+        alignItems: "center",
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    termsText: {
+        textAlign: "center",
+        color: "#9ca3af", // Gray-400 (Lighter gray for dark mode)
         fontSize: 12,
-        marginTop: 32,
-        textAlign: "center",
-    },
-    errorText: {
-        color: "#ef4444",
-        fontSize: 14,
-        marginTop: 16,
-        textAlign: "center",
-        paddingHorizontal: 16,
+        lineHeight: 18,
     },
 });

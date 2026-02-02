@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { ArrowLeft, Share2, Info, TrendingUp, Users, Calendar, Plus, Minus, ChevronUp } from "lucide-react-native";
+import { ArrowLeft, Share2, Info, TrendingUp, Users, Calendar, Plus, Minus, ChevronUp, X } from "lucide-react-native";
 import type { Market } from "../../../lib/mock-data";
 import { fetchMarketForApp, fetchDflowMarketCandlesticks } from "../../../lib/dflow";
 import { MarketChartNative } from "../../../components/MarketChartNative";
+import { TradePanel } from "../../../components/market/TradePanel";
+import { TradeSide } from "../../../hooks/useTrade";
 import { Image } from "expo-image";
+import { Modal } from "react-native";
 
 type TabKey = "position" | "about" | "holders" | "activity";
 
@@ -35,6 +38,8 @@ function MarketDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabKey>("position");
+    const [showTradePanel, setShowTradePanel] = useState(false);
+    const [initialSide, setInitialSide] = useState<TradeSide>("YES");
 
     useEffect(() => {
         if (!id) {
@@ -99,8 +104,15 @@ function MarketDetailScreen() {
         : true;
     const chartColor = isUp ? "#10b981" : "#ef4444";
 
-    const handleTrade = (side: string) => {
-        Alert.alert("Trade", `${side} trade functionality coming soon in Phase 4!`);
+    const handleOpenTrade = (side: TradeSide) => {
+        setInitialSide(side);
+        setShowTradePanel(true);
+    };
+
+    const handleTradeSuccess = (signature: string) => {
+        Alert.alert("Success", `Trade successful! Signature: ${signature.slice(0, 8)}...`);
+        setShowTradePanel(false);
+        // We might want to refresh the position here in a future phase
     };
 
     return (
@@ -203,7 +215,7 @@ function MarketDetailScreen() {
                                 <TouchableOpacity
                                     key={i}
                                     style={styles.activityRow}
-                                    onPress={() => handleTrade(item.type === "buy" ? "YES" : "NO")}
+                                    onPress={() => handleOpenTrade(item.type === "buy" ? "YES" : "NO")}
                                     activeOpacity={0.7}
                                 >
                                     <View style={[styles.activityIcon, item.type === "buy" ? styles.activityIconBuy : styles.activityIconSell]}>
@@ -274,17 +286,37 @@ function MarketDetailScreen() {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
+            {/* Trade Modal */}
+            <Modal
+                visible={showTradePanel}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowTradePanel(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Trade</Text>
+                            <TouchableOpacity onPress={() => setShowTradePanel(false)} style={styles.closeButton}>
+                                <X color="#fff" size={24} />
+                            </TouchableOpacity>
+                        </View>
+                        <TradePanel market={market} onSuccess={handleTradeSuccess} />
+                    </View>
+                </View>
+            </Modal>
+
             {/* Sticky Footer Actions */}
             <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.tradeButton, styles.buyYesButton]}
-                    onPress={() => handleTrade("YES")}
+                    onPress={() => handleOpenTrade("YES")}
                 >
                     <Text style={styles.tradeButtonText}>Buy YES {yesPercent}¢</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tradeButton, styles.buyNoButton]}
-                    onPress={() => handleTrade("NO")}
+                    onPress={() => handleOpenTrade("NO")}
                 >
                     <Text style={styles.tradeButtonText}>Buy NO {noPercent}¢</Text>
                 </TouchableOpacity>
@@ -564,6 +596,39 @@ const styles = StyleSheet.create({
         color: "#9ca3af",
         fontSize: 14,
         lineHeight: 22,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "flex-end",
+    },
+    modalContent: {
+        backgroundColor: "#000",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 40,
+        borderTopWidth: 1,
+        borderTopColor: "#333",
+    },
+    modalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    modalTitle: {
+        color: "#fff",
+        fontSize: 20,
+        fontWeight: "bold",
+    },
+    closeButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#222",
+        alignItems: "center",
+        justifyContent: "center",
     },
     footer: {
         position: "absolute",
