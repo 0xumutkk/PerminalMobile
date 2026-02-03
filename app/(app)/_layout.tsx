@@ -26,75 +26,75 @@ export default function AppLayout() {
         <>
             <ProfileSync />
             <Tabs
-            screenOptions={{
-                headerShown: false,
-                tabBarStyle: styles.tabBar,
-                tabBarActiveTintColor: "#fff",
-                tabBarInactiveTintColor: "#6b7280",
-                tabBarShowLabel: false,
-                tabBarIcon: ({ focused }) => null,
-                sceneContainerStyle: styles.sceneContainer,
-                tabBarBackground: () => <View style={styles.tabBarBackground} />,
-            }}
-        >
-            <Tabs.Screen
-                name="index"
-                options={{
-                    title: "Home",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} Icon={Home} />
-                    ),
+                screenOptions={{
+                    headerShown: false,
+                    tabBarStyle: styles.tabBar,
+                    tabBarActiveTintColor: "#fff",
+                    tabBarInactiveTintColor: "#6b7280",
+                    tabBarShowLabel: false,
+                    tabBarIcon: ({ focused }) => null,
+                    sceneStyle: styles.sceneContainer,
+                    tabBarBackground: () => <View style={styles.tabBarBackground} />,
                 }}
-            />
-            <Tabs.Screen
-                name="portfolio/index"
-                options={{
-                    title: "Portfolio",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} Icon={ArrowUpCircle} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="markets/index"
-                options={{
-                    title: "Markets",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} Icon={Globe} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="search/index"
-                options={{
-                    title: "Search",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} Icon={Search} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="profile/index"
-                options={{
-                    title: "Profile",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon focused={focused} Icon={User} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="market/[id]"
-                options={{
-                    href: null,
-                }}
-            />
-            <Tabs.Screen
-                name="profile/[id]"
-                options={{
-                    href: null,
-                }}
-            />
-        </Tabs>
+            >
+                <Tabs.Screen
+                    name="index"
+                    options={{
+                        title: "Home",
+                        tabBarIcon: ({ focused }) => (
+                            <TabIcon focused={focused} Icon={Home} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="portfolio/index"
+                    options={{
+                        title: "Portfolio",
+                        tabBarIcon: ({ focused }) => (
+                            <TabIcon focused={focused} Icon={ArrowUpCircle} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="markets/index"
+                    options={{
+                        title: "Markets",
+                        tabBarIcon: ({ focused }) => (
+                            <TabIcon focused={focused} Icon={Globe} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="search/index"
+                    options={{
+                        title: "Search",
+                        tabBarIcon: ({ focused }) => (
+                            <TabIcon focused={focused} Icon={Search} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="profile/index"
+                    options={{
+                        title: "Profile",
+                        tabBarIcon: ({ focused }) => (
+                            <TabIcon focused={focused} Icon={User} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="market/[id]"
+                    options={{
+                        href: null,
+                    }}
+                />
+                <Tabs.Screen
+                    name="profile/[id]"
+                    options={{
+                        href: null,
+                    }}
+                />
+            </Tabs>
         </>
     );
 }
