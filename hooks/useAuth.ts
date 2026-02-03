@@ -1,5 +1,5 @@
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const SOLANA_RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
@@ -18,11 +18,22 @@ export function useAuth() {
     // Also try to get address directly from useEmbeddedSolanaWallet if connected
     const embeddedAddress = isConnected(solanaWallet) ? solanaWallet.wallets[0]?.address : null;
 
-    const activeWallet = (solanaAccount as any)?.address || embeddedAddress
-        ? { address: (solanaAccount as any)?.address || embeddedAddress }
-        : null;
+    // Memoize user and activeWallet to prevent infinite loops in hooks/components depending on them
+    const memoizedActiveWallet = useMemo(() => {
+        const address = (solanaAccount as any)?.address || embeddedAddress;
+        return address ? { address } : null;
+    }, [(solanaAccount as any)?.address, embeddedAddress]);
 
-    const signAndSendTransaction = useCallback(async (transactionBytes: Uint8Array) => {
+    const memoizedUser = useMemo(() => {
+        if (!user) return null;
+        return {
+            ...user,
+            email: emailAccount ? { address: (emailAccount as any).address } : undefined
+        };
+    }, [user, emailAccount]);
+
+
+    const signAndSendTransaction = useCallback(async (transaction: VersionedTransaction) => {
         if (!isConnected(solanaWallet)) {
             throw new Error("Solana wallet not connected");
         }
@@ -30,10 +41,13 @@ export function useAuth() {
         const wallet = solanaWallet.wallets[0];
         const provider = await wallet.getProvider();
 
-        const connection = new Connection(SOLANA_RPC_URL);
-        const transaction = VersionedTransaction.deserialize(transactionBytes);
+        // Create connection for the provider
+        const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 
-        const { signature } = await provider.request({
+        console.log("[useAuth] Requesting signAndSendTransaction via Privy...");
+
+        // Privy Solana provider expects the transaction object and connection
+        const result = await provider.request({
             method: 'signAndSendTransaction',
             params: {
                 transaction,
@@ -41,15 +55,21 @@ export function useAuth() {
             }
         });
 
-        return { signature };
+        if (!result || !result.signature) {
+            throw new Error("Failed to get signature from wallet provider");
+        }
+
+        console.log("[useAuth] Transaction signed and sent, signature:", result.signature);
+        return { signature: result.signature };
     }, [solanaWallet]);
 
     return {
         authenticated: !!user,
-        user: user ? { ...user, email: emailAccount ? { address: (emailAccount as any).address } : undefined } : null,
-        activeWallet,
+        user: memoizedUser,
+        activeWallet: memoizedActiveWallet,
         isReady: privyReady && isConnected(solanaWallet),
         signAndSendTransaction,
         solanaWalletStatus: solanaWallet.status,
     };
 }
+

@@ -6,6 +6,9 @@ import { Database } from './database.types';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
+console.log("[Supabase] Initializing with URL:", supabaseUrl);
+console.log("[Supabase] Key starts with:", supabaseAnonKey ? `${supabaseAnonKey.slice(0, 10)}...` : "EMPTY");
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
         storage: AsyncStorage,

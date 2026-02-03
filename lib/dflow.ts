@@ -54,8 +54,19 @@ export interface DFlowMarket {
     status?: string | null;
     yesSubTitle?: string | null;
     noSubTitle?: string | null;
-    accounts?: { yesMint?: string; noMint?: string } | null;
+    // accounts is keyed by collateral token mint address (e.g. USDC)
+    accounts?: Record<string, {
+        marketLedger?: string;
+        yesMint?: string;
+        noMint?: string;
+        isInitialized?: boolean;
+        redemptionStatus?: string | null;
+    }> | null;
 }
+
+// USDC mint address on Solana mainnet - used to extract the correct accounts entry
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
 
 /** DFlow API: series (category lives here) */
 export interface DFlowSeries {
@@ -102,7 +113,13 @@ export function dflowEventMarketToMarket(
     const volume = typeof market.volume === "number" ? market.volume : (event.volume ?? 0) as number;
     const closeTime = market.closeTime ?? market.expirationTime ?? 0;
     const resolveDate = closeTime ? new Date(closeTime * 1000).toISOString() : "";
-    const accounts = market.accounts;
+
+    // Extract accounts from USDC collateral entry
+    // accounts is keyed by collateral token mint (e.g. USDC mint address)
+    const usdcAccounts = market.accounts?.[USDC_MINT];
+    const yesMint = usdcAccounts?.yesMint ?? "";
+    const noMint = usdcAccounts?.noMint ?? "";
+
     const category =
         seriesCategoryMap && event.seriesTicker && seriesCategoryMap.has(event.seriesTicker)
             ? seriesCategoryMap.get(event.seriesTicker)!
@@ -117,8 +134,8 @@ export function dflowEventMarketToMarket(
         volume: Number(volume) || 0,
         liquidityScore: typeof event.liquidity === "number" ? Math.min(100, event.liquidity) : 0,
         resolveDate,
-        yesMint: accounts?.yesMint ?? "",
-        noMint: accounts?.noMint ?? "",
+        yesMint,
+        noMint,
         yesLabel: market.yesSubTitle ?? "YES",
         noLabel: market.noSubTitle ?? "NO",
         ticker: market.ticker,
@@ -127,6 +144,8 @@ export function dflowEventMarketToMarket(
         priceHistory: [],
     };
 }
+
+
 
 /**
  * Fetch series list (ticker + category). Used to map event.seriesTicker -> app category.

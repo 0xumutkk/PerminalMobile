@@ -31,26 +31,44 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
         setAmount(val.toString());
     };
 
-    // Auto-quote when amount or side changes
+    // Auto-quote when amount or side changes (debounced)
     useEffect(() => {
         const numAmount = parseFloat(amount);
-        if (numAmount >= 1) {
-            const outputMint = side === "YES" ? market.yesMint : market.noMint;
-            if (outputMint) {
-                getQuote({ outputMint, amountUsdc: numAmount, side });
-            }
-        }
-    }, [amount, side, market.yesMint, market.noMint, getQuote]);
-
-    const handleTrade = async () => {
-        const numAmount = parseFloat(amount);
-        if (isNaN(numAmount) || numAmount < 1) return;
-
-        Keyboard.dismiss();
+        if (numAmount < 1) return;
 
         const outputMint = side === "YES" ? market.yesMint : market.noMint;
         if (!outputMint) return;
 
+        // Debounce quote requests to prevent rapid API calls
+        const timeoutId = setTimeout(() => {
+            getQuote({ outputMint, amountUsdc: numAmount, side });
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+    }, [amount, side, market.yesMint, market.noMint]); // Removed getQuote from deps - it's stable via useCallback
+
+
+    const handleTrade = async () => {
+        console.log("[TradePanel] handleTrade called!");
+        console.log("[TradePanel] amount:", amount, "side:", side);
+        console.log("[TradePanel] isLoading:", isLoading, "isButtonDisabled:", isButtonDisabled);
+
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount < 1) {
+            console.log("[TradePanel] Invalid amount, returning early");
+            return;
+        }
+
+        Keyboard.dismiss();
+
+        const outputMint = side === "YES" ? market.yesMint : market.noMint;
+        console.log("[TradePanel] outputMint:", outputMint);
+        if (!outputMint) {
+            console.log("[TradePanel] No outputMint, returning early");
+            return;
+        }
+
+        console.log("[TradePanel] Calling buy()...");
         const signature = await buy({
             marketId: market.id,
             outputMint,
@@ -58,6 +76,7 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
             side,
         });
 
+        console.log("[TradePanel] buy() returned:", signature);
         if (signature && onSuccess) {
             onSuccess(signature);
         }

@@ -28,8 +28,14 @@ class DFlowTradeService {
         userPublicKey: string;
         slippageBps?: number;
     }): Promise<DFlowQuoteResponse> {
+        // Validate amount is a valid positive number
+        if (isNaN(params.amountUsdc) || params.amountUsdc <= 0) {
+            throw new Error("Invalid amount: must be a positive number");
+        }
+
         // Convert USDC amount to smallest unit (6 decimals)
         const amountLamports = Math.floor(params.amountUsdc * Math.pow(10, USDC_DECIMALS));
+
 
         const searchParams = new URLSearchParams({
             inputMint: USDC_MINT,

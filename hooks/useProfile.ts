@@ -11,9 +11,11 @@ export function useProfile() {
     const [error, setError] = useState<string | null>(null);
 
     const getCurrentUserId = useCallback(() => {
+        if (user?.id) return user.id; // Primary identifier: Privy stable ID
+
         if (user?.email?.address) {
             try {
-                // Compatible with web implementation
+                // Fallback for legacy web compatibility
                 return Buffer.from(user.email.address).toString('base64').replace(/[^a-zA-Z0-9]/g, "").slice(0, 36);
             } catch (e) {
                 return user.email.address;
@@ -33,16 +35,25 @@ export function useProfile() {
         }
 
         setIsLoading(true);
+        setError(null);
         try {
-            const { data, error } = await supabase
+            console.log("[useProfile] Fetching profile for ID:", userId);
+            const { data, error: fetchError } = await supabase
                 .from("profiles")
                 .select("*")
                 .eq("id", userId)
                 .maybeSingle();
 
+            if (fetchError) {
+                console.error("[useProfile] Fetch error:", fetchError);
+                throw fetchError;
+            }
+
             if (data) {
+                console.log("[useProfile] Found existing profile");
                 setProfile(data as any);
-            } else if (!data) {
+            } else {
+                console.log("[useProfile] Profile not found, creating one...");
                 // Profile doesn't exist, create one
                 // Generate a unique username
                 const baseUsername = activeWallet?.address
@@ -63,10 +74,14 @@ export function useProfile() {
                     .single();
 
                 if (createError) {
+                    // Check for unique constraint violation (username or id)
                     if (createError.code === "23505") {
-                        // Username taken, retry with random
+                        console.log("[useProfile] Conflict on insert, checking why...");
+
+                        // If it's a username conflict, retry with random suffix
+                        // If it's an ID conflict, it means someone else created the profile meanwhile
                         const randomSuffix = Math.random().toString(36).slice(2, 6);
-                        const { data: retryProfile } = await supabase
+                        const { data: retryProfile, error: retryError } = await supabase
                             .from("profiles")
                             .insert({
                                 id: userId,
@@ -75,21 +90,37 @@ export function useProfile() {
                             } as any)
                             .select()
                             .single();
-                        if (retryProfile) setProfile(retryProfile);
+
+                        if (retryError) {
+                            if (retryError.code === "23505") {
+                                // Probably ID conflict now (profile exists). Just fetch again.
+                                const { data: finalProfile } = await supabase
+                                    .from("profiles")
+                                    .select("*")
+                                    .eq("id", userId)
+                                    .single();
+                                if (finalProfile) setProfile(finalProfile);
+                            } else {
+                                console.error("[useProfile] Retry create error:", retryError);
+                            }
+                        } else if (retryProfile) {
+                            setProfile(retryProfile);
+                        }
                     } else {
-                        console.error("Create profile error:", createError);
+                        console.error("[useProfile] Create profile error:", createError);
                     }
                 } else if (newProfile) {
                     setProfile(newProfile as any);
                 }
             }
         } catch (err) {
-            console.error("Profile error:", err);
+            console.error("[useProfile] General error:", err);
             setError(err instanceof Error ? err.message : "Profile Error");
         } finally {
             setIsLoading(false);
         }
     }, [getCurrentUserId, activeWallet]);
+
 
     useEffect(() => {
         if (authenticated) {
