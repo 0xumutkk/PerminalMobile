@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Keyboard } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useTrade, TradeSide } from "../../hooks/useTrade";
 import { useFundSolanaWallet } from "@privy-io/expo/ui";
 import { Market } from "../../lib/mock-data";
@@ -15,6 +16,7 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
     const { fundWallet } = useFundSolanaWallet();
     const [side, setSide] = useState<TradeSide>(initialSide);
     const [amount, setAmount] = useState<string>("");
+    const [slippageBps, setSlippageBps] = useState<number | null>(null); // null = Auto (Default 1%)
 
     // Sync side if initialSide changes
     useEffect(() => {
@@ -41,11 +43,11 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
 
         // Debounce quote requests to prevent rapid API calls
         const timeoutId = setTimeout(() => {
-            getQuote({ outputMint, amountUsdc: numAmount, side });
+            getQuote({ outputMint, amountUsdc: numAmount, side, slippageBps: slippageBps || 100 });
         }, 300);
 
         return () => clearTimeout(timeoutId);
-    }, [amount, side, market.yesMint, market.noMint]); // Removed getQuote from deps - it's stable via useCallback
+    }, [amount, side, market.yesMint, market.noMint, slippageBps]);
 
 
     const handleTrade = async () => {
@@ -69,11 +71,15 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
         }
 
         console.log("[TradePanel] Calling buy()...");
+        const expectedPrice = side === "YES" ? market.yesPrice : (1 - market.yesPrice);
+
         const signature = await buy({
             marketId: market.id,
             outputMint,
             amountUsdc: numAmount,
             side,
+            slippageBps: slippageBps || 100,
+            expectedPrice,
         });
 
         console.log("[TradePanel] buy() returned:", signature);
@@ -119,17 +125,28 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
                 </TouchableOpacity>
             </View>
 
-            {/* Quick Amounts */}
-            <View style={styles.quickAmountRow}>
-                {[10, 50, 100].map((val) => (
+            {/* Slippage Settings */}
+            <View style={styles.slippageRow}>
+                <Text style={styles.slippageLabel}>Slippage</Text>
+                <View style={styles.slippageOptions}>
                     <TouchableOpacity
-                        key={val}
-                        style={styles.quickAmountButton}
-                        onPress={() => setQuickAmount(val)}
+                        style={[styles.slippageButton, slippageBps === null && styles.slippageButtonActive]}
+                        onPress={() => setSlippageBps(null)}
                     >
-                        <Text style={styles.quickAmountText}>${val}</Text>
+                        <Text style={[styles.slippageText, slippageBps === null && styles.whiteText]}>Auto</Text>
                     </TouchableOpacity>
-                ))}
+                    {[50, 100, 500].map((bps) => (
+                        <TouchableOpacity
+                            key={bps}
+                            style={[styles.slippageButton, slippageBps === bps && styles.slippageButtonActive]}
+                            onPress={() => setSlippageBps(bps)}
+                        >
+                            <Text style={[styles.slippageText, slippageBps === bps && styles.whiteText]}>
+                                {bps / 100}%
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             </View>
 
             {/* Amount Input */}
@@ -157,18 +174,57 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
                     <ActivityIndicator size="small" color="#fff" />
                 ) : quote ? (
                     <View style={styles.quoteInfo}>
-                        <View style={styles.quoteRow}>
-                            <Text style={styles.quoteLabel}>Est. Shares</Text>
-                            <Text style={styles.quoteValue}>
-                                {parseFloat(quote.outAmount).toLocaleString()}
-                            </Text>
-                        </View>
-                        <View style={styles.quoteRow}>
-                            <Text style={styles.quoteLabel}>Price Impact</Text>
-                            <Text style={[styles.quoteValue, parseFloat(quote.priceImpactPct) > 2 ? styles.warningText : {}]}>
-                                {quote.priceImpactPct}%
-                            </Text>
-                        </View>
+                        {(() => {
+                            const outAmountUI = parseFloat(quote.outAmount) / 1000000;
+                            const amountNum = parseFloat(amount) || 0;
+                            const marketPrice = side === "YES" ? market.yesPrice : (1 - market.yesPrice);
+                            const executionPrice = amountNum / outAmountUI;
+                            const priceGapPct = ((executionPrice - marketPrice) / marketPrice) * 100;
+                            const theoreticalShares = amountNum / marketPrice;
+
+                            return (
+                                <>
+                                    <View style={styles.quoteRow}>
+                                        <Text style={styles.quoteLabel}>Market Price</Text>
+                                        <Text style={styles.quoteValue}>{(marketPrice * 100).toFixed(2)}¢</Text>
+                                    </View>
+                                    <View style={styles.quoteRow}>
+                                        <Text style={styles.quoteLabel}>Execution Price</Text>
+                                        <Text style={[styles.quoteValue, priceGapPct > 5 ? styles.warningText : {}]}>
+                                            {(executionPrice * 100).toFixed(2)}¢
+                                        </Text>
+                                    </View>
+                                    <View style={styles.divider} />
+                                    <View style={styles.quoteRow}>
+                                        <Text style={styles.quoteLabel}>Theoretical Shares</Text>
+                                        <Text style={[styles.quoteValue, { color: '#666' }]}>
+                                            {theoreticalShares.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.quoteRow}>
+                                        <Text style={styles.quoteLabel}>Actual Shares (Quote)</Text>
+                                        <Text style={[styles.quoteValue, priceGapPct > 10 ? styles.errorText : {}]}>
+                                            {outAmountUI.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.quoteRow}>
+                                        <Text style={styles.quoteLabel}>Price Impact</Text>
+                                        <Text style={[
+                                            styles.quoteValue,
+                                            priceGapPct > 5 ? styles.warningText : priceGapPct > 15 ? styles.errorText : {}
+                                        ]}>
+                                            {priceGapPct > 0.01 ? `${priceGapPct.toFixed(2)}%` : "0%"}
+                                        </Text>
+                                    </View>
+                                    {priceGapPct > 15 && (
+                                        <View style={styles.dangerAlert}>
+                                            <MaterialIcons name="warning" size={14} color="#ef4444" />
+                                            <Text style={styles.dangerAlertText}>Extremely low liquidity!</Text>
+                                        </View>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </View>
                 ) : (
                     <Text style={styles.placeholderInfo}>Enter an amount to see quote</Text>
@@ -311,17 +367,72 @@ const styles = StyleSheet.create({
         marginTop: 6,
         textAlign: "right",
     },
-    infoSection: {
-        height: 60,
-        justifyContent: "center",
+    slippageRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
         marginBottom: 16,
     },
+    slippageLabel: {
+        color: "#999",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    slippageOptions: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    slippageButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 6,
+        backgroundColor: "#1a1a1a",
+        borderWidth: 1,
+        borderColor: "#333",
+    },
+    slippageButtonActive: {
+        backgroundColor: "#444",
+        borderColor: "#666",
+    },
+    slippageText: {
+        color: "#999",
+        fontSize: 12,
+        fontWeight: "bold",
+    },
+    infoSection: {
+        backgroundColor: "#111",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#222",
+    },
     quoteInfo: {
-        gap: 4,
+        gap: 6,
     },
     quoteRow: {
         flexDirection: "row",
         justifyContent: "space-between",
+        alignItems: "center",
+    },
+    divider: {
+        height: 1,
+        backgroundColor: "#222",
+        marginVertical: 4,
+    },
+    dangerAlert: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
+        padding: 8,
+        borderRadius: 8,
+        marginTop: 4,
+        gap: 6,
+    },
+    dangerAlertText: {
+        color: "#ef4444",
+        fontSize: 12,
+        fontWeight: "bold",
     },
     quoteLabel: {
         color: "#999",

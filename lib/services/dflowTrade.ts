@@ -55,8 +55,17 @@ class DFlowTradeService {
 
         if (!response.ok) {
             const errorText = await response.text();
+            let errorMessage = `DFlow quote failed: ${response.status}`;
+            try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.msg) {
+                    errorMessage = `${errorJson.msg}`;
+                }
+            } catch (e) {
+                // Not JSON, use generic message
+            }
             console.error(`[DFlowTradeService] Quote failed (${response.status}):`, errorText);
-            throw new Error(`DFlow quote failed: ${response.status}`);
+            throw new Error(errorMessage);
         }
 
         return response.json();

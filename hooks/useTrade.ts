@@ -11,6 +11,8 @@ export interface TradeParams {
     outputMint: string; // Token mint to receive
     amountUsdc: number; // Amount in USDC
     side: TradeSide;
+    slippageBps?: number;
+    expectedPrice?: number; // Market price shown in UI for safety check
 }
 
 export interface TradeState {
@@ -79,7 +81,7 @@ export function useTrade() {
                     outputMint: params.outputMint,
                     amountUsdc: params.amountUsdc,
                     userPublicKey: activeWallet.address,
-                    slippageBps: 100, // 1% slippage for prediction markets
+                    slippageBps: params.slippageBps || 5000, // 5000bps (50%) for Auto to see full depth
                 });
 
                 setState((s) => ({ ...s, isQuoting: false, quote }));
@@ -122,14 +124,28 @@ export function useTrade() {
             }));
 
             try {
-                console.log(`[Trade] Getting quote for ${params.amountUsdc} USDC -> ${params.side}`);
+                console.log(`[Trade] Getting quote for ${params.amountUsdc} USDC -> ${params.side} (Slippage: ${params.slippageBps || 100}bps)`);
 
                 const quote = await dflowTradeService.getQuote({
                     outputMint: params.outputMint,
                     amountUsdc: params.amountUsdc,
                     userPublicKey: activeWallet.address,
-                    slippageBps: 100,
+                    slippageBps: params.slippageBps || 5000,
                 });
+
+                // Safety Check: Verify effective price against expected market price
+                if (params.expectedPrice) {
+                    const outAmountNum = parseFloat(quote.outAmount);
+                    const effectivePrice = params.amountUsdc / outAmountNum;
+                    const priceGapPct = ((effectivePrice - params.expectedPrice) / params.expectedPrice) * 100;
+
+                    console.log(`[Trade] Safety Check: Expected Price=$${params.expectedPrice}, Effective Price=$${effectivePrice.toFixed(4)}, Gap=${priceGapPct.toFixed(2)}%`);
+
+                    // If effective price is > 15% worse than expected price, block it
+                    if (priceGapPct > 15) {
+                        throw new Error(`Extreme Price Discrepancy: Market Price is $${params.expectedPrice} but execution price is $${effectivePrice.toFixed(4)} (${priceGapPct.toFixed(0)}% price impact). Low liquidity?`);
+                    }
+                }
 
                 setState((s) => ({
                     ...s,
