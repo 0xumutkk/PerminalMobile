@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Keyboard } from "react-native";
 import { useTrade, TradeSide } from "../../hooks/useTrade";
+import { useFundSolanaWallet } from "@privy-io/expo/ui";
 import { Market } from "../../lib/mock-data";
 
 interface TradePanelProps {
@@ -10,7 +11,8 @@ interface TradePanelProps {
 }
 
 export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePanelProps) {
-    const { buy, getQuote, isLoading, isQuoting, isSigning, isConfirming, error, quote, reset, usdcBalance } = useTrade();
+    const { buy, getQuote, isLoading, isQuoting, isSigning, isConfirming, error, quote, reset, usdcBalance, walletAddress } = useTrade();
+    const { fundWallet } = useFundSolanaWallet();
     const [side, setSide] = useState<TradeSide>(initialSide);
     const [amount, setAmount] = useState<string>("");
 
@@ -61,7 +63,17 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
         }
     };
 
+    const handleFundWallet = async () => {
+        if (!walletAddress) return;
+        try {
+            await fundWallet({ address: walletAddress });
+        } catch (e) {
+            console.error("[TradePanel] Funding error:", e);
+        }
+    };
+
     const isButtonDisabled = isLoading || !amount || parseFloat(amount) < 1;
+    const isInsufficientBalance = usdcBalance !== null && amount && parseFloat(amount) > usdcBalance;
 
     return (
         <View style={styles.container}>
@@ -170,6 +182,15 @@ export function TradePanel({ market, onSuccess, initialSide = "YES" }: TradePane
                     </Text>
                 )}
             </TouchableOpacity>
+
+            {/* Insufficient Balance Prompt */}
+            {isInsufficientBalance && !isLoading && (
+                <TouchableOpacity style={styles.fundPrompt} onPress={handleFundWallet}>
+                    <Text style={styles.fundPromptText}>
+                        Insufficient balance. <Text style={styles.fundLink}>Add funds</Text>
+                    </Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 }
@@ -335,5 +356,19 @@ const styles = StyleSheet.create({
         color: "#fff",
         fontSize: 16,
         fontWeight: "600",
+    },
+    fundPrompt: {
+        marginTop: 12,
+        alignItems: "center",
+        paddingVertical: 8,
+    },
+    fundPromptText: {
+        color: "#999",
+        fontSize: 14,
+    },
+    fundLink: {
+        color: "#a855f7",
+        fontWeight: "bold",
+        textDecorationLine: "underline",
     },
 });

@@ -2,6 +2,10 @@
  * Shared types for Supabase public.profiles (and related) used across app.
  * Matches supabase-schema.sql + seed-data.sql (pnl, win_rate).
  */
+
+/** Row from follows table (select following_id or follower_id). */
+export type FollowRow = { following_id: string } | { follower_id: string };
+
 export interface Profile {
     id: string;
     wallet_address: string | null;

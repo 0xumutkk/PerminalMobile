@@ -4,8 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected, isNotCreated, isCreating, hasError, isConnecting, isReconnecting, isDisconnected } from "@privy-io/expo";
+import { useFundSolanaWallet } from "@privy-io/expo/ui";
 import { supabase } from "../../../lib/supabase";
 import type { Profile } from "../../../lib/supabase-types";
+type FollowFollowing = { following_id: string };
+type FollowFollower = { follower_id: string };
+type ProfileIdRow = { id: string };
 
 function shortenAddress(address: string, chars = 4) {
     if (!address || address.length < chars * 2 + 2) return address;
@@ -16,6 +20,7 @@ export default function ProfileScreen() {
     const router = useRouter();
     const { logout, user } = usePrivy();
     const solanaWallet = useEmbeddedSolanaWallet();
+    const { fundWallet } = useFundSolanaWallet();
     const [isCreatingWallet, setIsCreatingWallet] = useState(false);
     const [isLoadingWallet, setIsLoadingWallet] = useState(false);
     const loadAttempted = useRef(false);
@@ -51,6 +56,16 @@ export default function ProfileScreen() {
         }
     };
 
+    const handleDeposit = async () => {
+        if (!primaryAddress) return;
+        try {
+            await fundWallet({ address: primaryAddress });
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!msg.includes("funding_flow_cancelled")) Alert.alert("Deposit", msg);
+        }
+    };
+
     // Auto-try to load wallet once when in disconnected state (e.g. after login, wallet exists but not loaded)
     const walletStatus = solanaWallet.status;
     useEffect(() => {
@@ -82,12 +97,10 @@ export default function ProfileScreen() {
             supabase.from("follows").select("following_id").in("follower_id", profileIds),
             supabase.from("follows").select("follower_id").in("following_id", profileIds),
         ]);
-        const following = followingRes.error
-            ? 0
-            : new Set((followingRes.data ?? []).map((r) => String(r.following_id))).size;
-        const followers = followersRes.error
-            ? 0
-            : new Set((followersRes.data ?? []).map((r) => String(r.follower_id))).size;
+        const followingData = (followingRes.data ?? []) as FollowFollowing[];
+        const followersData = (followersRes.data ?? []) as FollowFollower[];
+        const following = followingRes.error ? 0 : new Set(followingData.map((r) => String(r.following_id))).size;
+        const followers = followersRes.error ? 0 : new Set(followersData.map((r) => String(r.follower_id))).size;
         return { following, followers };
     }, []);
 
@@ -136,11 +149,12 @@ export default function ProfileScreen() {
                 // Follow sayıları: aynı cüzdana ait TÜM profil id'leri için; benzersiz kişi sayısı (Leaderboard ile uyumlu)
                 const profileIdsForWallet: string[] = [user.id];
                 if (primaryAddress) {
-                    const { data: walletProfiles } = await supabase
+                    const { data: walletProfilesData } = await supabase
                         .from("profiles")
                         .select("id")
                         .eq("wallet_address", primaryAddress);
-                    if (!cancelled && walletProfiles?.length) {
+                    const walletProfiles = (walletProfilesData ?? []) as ProfileIdRow[];
+                    if (!cancelled && walletProfiles.length) {
                         const ids = [...new Set([user.id, ...walletProfiles.map((p) => String(p.id))])];
                         profileIdsForWallet.length = 0;
                         profileIdsForWallet.push(...ids);
@@ -164,11 +178,12 @@ export default function ProfileScreen() {
         (async () => {
             const profileIdsForWallet: string[] = [user.id];
             if (primaryAddress) {
-                const { data: walletProfiles } = await supabase
+                const { data: walletProfilesData } = await supabase
                     .from("profiles")
                     .select("id")
                     .eq("wallet_address", primaryAddress);
-                if (!cancelled && walletProfiles?.length) {
+                const walletProfiles = (walletProfilesData ?? []) as ProfileIdRow[];
+                if (!cancelled && walletProfiles.length) {
                     const ids = [...new Set([user.id, ...walletProfiles.map((p) => String(p.id))])];
                     profileIdsForWallet.length = 0;
                     profileIdsForWallet.push(...ids);
@@ -192,28 +207,27 @@ export default function ProfileScreen() {
     const saveProfile = async () => {
         if (!user?.id || !profile) return;
         setSaving(true);
-        const { error } = await supabase
-            .from("profiles")
-            .update({
-                display_name: editDisplayName.trim() || null,
-                username: editUsername.trim() || profile.username,
-                bio: editBio.trim() || null,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", user.id);
+        const updatePayload = {
+            display_name: editDisplayName.trim() || null,
+            username: editUsername.trim() || profile.username,
+            bio: editBio.trim() || null,
+            updated_at: new Date().toISOString(),
+        };
+        // @ts-expect-error - Supabase client has no DB types; update payload matches profiles table
+        const { error } = await supabase.from("profiles").update(updatePayload).eq("id", user.id);
         setSaving(false);
         if (error) {
-            Alert.alert("Update failed", error.message);
+            Alert.alert("Update failed", (error as { message?: string }).message ?? String(error));
             return;
         }
         setProfile((prev) =>
             prev
                 ? {
-                      ...prev,
-                      display_name: editDisplayName.trim() || null,
-                      username: editUsername.trim() || profile.username,
-                      bio: editBio.trim() || null,
-                  }
+                    ...prev,
+                    display_name: editDisplayName.trim() || null,
+                    username: editUsername.trim() || profile.username,
+                    bio: editBio.trim() || null,
+                }
                 : null
         );
         setEditing(false);
@@ -324,6 +338,9 @@ export default function ProfileScreen() {
                                 {primaryAddress}
                             </Text>
                             <Text style={styles.shortAddress}>{shortenAddress(primaryAddress)}</Text>
+                            <TouchableOpacity onPress={handleDeposit} style={styles.inlineDepositButton}>
+                                <Text style={styles.inlineDepositText}>Deposit</Text>
+                            </TouchableOpacity>
                         </View>
                     ) : isNotCreated(solanaWallet) ? (
                         <TouchableOpacity
@@ -426,4 +443,18 @@ const styles = StyleSheet.create({
     createWalletText: { color: "#fff", fontWeight: "600" },
     logoutButton: { marginTop: 40, backgroundColor: "#111", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: "#331111" },
     logoutText: { color: "#ff4444", fontWeight: "600" },
+    inlineDepositButton: {
+        marginLeft: "auto",
+        backgroundColor: "#3b0764",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#6b21a8",
+    },
+    inlineDepositText: {
+        color: "#fff",
+        fontSize: 12,
+        fontWeight: "bold",
+    },
 });

@@ -1,5 +1,6 @@
 import React from "react";
 import { PrivyProvider, SecureStorageAdapter } from "@privy-io/expo";
+import { PrivyElements } from "@privy-io/expo/ui";
 
 export const PrivyAuthProvider = ({ children }: { children: React.ReactNode }) => {
     const appId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
@@ -19,6 +20,7 @@ export const PrivyAuthProvider = ({ children }: { children: React.ReactNode }) =
                 },
             }}
         >
+            <PrivyElements />
             {children}
         </PrivyProvider>
     );
