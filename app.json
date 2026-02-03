@@ -15,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.perminal.mobile"
+      "bundleIdentifier": "com.perminal.mobile",
+      "entitlements": {
+        "com.apple.developer.in-app-payments": [
+          "YOUR_MERCHANT_ID_HERE"
+        ]
+      }
     },
     "android": {
       "package": "com.perminal.mobile",
@@ -31,7 +36,13 @@
     },
     "plugins": [
       "expo-web-browser",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use FaceID"
+        }
+      ]
     ]
   }
 }

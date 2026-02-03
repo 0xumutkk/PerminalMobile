@@ -14,11 +14,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
+import { useFundSolanaWallet } from "@privy-io/expo/ui";
+import { DepositModal } from "../../components/DepositModal";
 import type { Market } from "../../lib/mock-data";
 import { fetchMarketsForApp } from "../../lib/dflow";
 import { MarketCardNative } from "../../components/MarketCardNative";
 import { getSolBalance, getSolPriceUsd, getUsdcBalance } from "../../lib/solana";
-import { LayoutGrid, Gift, DollarSign, Flame, Tag, X } from "lucide-react-native";
+import { LayoutGrid, Gift, DollarSign, Flame, Tag, X, Wallet } from "lucide-react-native";
 import { TradePanel } from "../../components/market/TradePanel";
 import { TradeSide } from "../../hooks/useTrade";
 
@@ -46,6 +48,7 @@ function formatUsdc(value: number): string {
 export default function HomeFeed() {
     const { user } = usePrivy();
     const solanaWallet = useEmbeddedSolanaWallet();
+    const { fundWallet } = useFundSolanaWallet();
     const primaryAddress =
         isConnected(solanaWallet) && solanaWallet.wallets?.[0]
             ? solanaWallet.wallets[0].address
@@ -63,6 +66,7 @@ export default function HomeFeed() {
     const [showTradePanel, setShowTradePanel] = useState(false);
     const [tradingMarket, setTradingMarket] = useState<Market | null>(null);
     const [selectedSide, setSelectedSide] = useState<TradeSide>("YES");
+    const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
 
     const handleOpenTrade = (market: Market, side: TradeSide) => {
         setTradingMarket(market);
@@ -76,6 +80,42 @@ export default function HomeFeed() {
         // Refresh balance after trade
         if (primaryAddress) {
             getUsdcBalance(primaryAddress).then(setUsdcBalance);
+        }
+    };
+
+    const handleDeposit = () => {
+        setIsDepositModalVisible(true);
+    };
+
+    const handleSelectMethod = async (method: "apple_pay" | "google_pay" | "card") => {
+        if (!primaryAddress) {
+            Alert.alert("Wallet required", "Connect your Solana wallet first to deposit.");
+            return;
+        }
+
+        setIsDepositModalVisible(false);
+
+        try {
+            const options: any = {
+                address: primaryAddress,
+            };
+
+            if (method === "apple_pay") {
+                options.defaultPaymentMethod = "apple_pay";
+            } else if (method === "google_pay") {
+                options.defaultPaymentMethod = "google_pay";
+            } else {
+                options.defaultPaymentMethod = "card";
+            }
+
+            await fundWallet(options);
+
+            // Refresh balances
+            getSolBalance(primaryAddress).then(setSolBalance);
+            getUsdcBalance(primaryAddress).then(setUsdcBalance);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!msg.includes("funding_flow_cancelled")) Alert.alert("Deposit", msg);
         }
     };
 
@@ -203,6 +243,15 @@ export default function HomeFeed() {
                 </View>
             </View>
 
+            <Pressable
+                style={[styles.depositButton, !primaryAddress && styles.depositButtonDisabled]}
+                onPress={handleDeposit}
+                disabled={!primaryAddress}
+            >
+                <Wallet color="#fff" size={20} strokeWidth={2} />
+                <Text style={styles.depositButtonText}>Deposit</Text>
+            </Pressable>
+
             {/* Category filters: Popular + DFlow categories */}
             <ScrollView
                 horizontal
@@ -295,6 +344,12 @@ export default function HomeFeed() {
                     </View>
                 </View>
             </Modal>
+
+            <DepositModal
+                visible={isDepositModalVisible}
+                onClose={() => setIsDepositModalVisible(false)}
+                onSelectMethod={handleSelectMethod}
+            />
         </SafeAreaView>
     );
 }
@@ -349,7 +404,28 @@ const styles = StyleSheet.create({
     balanceRow: {
         flexDirection: "row",
         gap: 12,
+        marginBottom: 12,
+    },
+    depositButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        backgroundColor: "#3b0764",
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 14,
         marginBottom: 20,
+        borderWidth: 1,
+        borderColor: "#6b21a8",
+    },
+    depositButtonDisabled: {
+        opacity: 0.5,
+    },
+    depositButtonText: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "700",
     },
     portfolioCard: {
         flex: 1,
