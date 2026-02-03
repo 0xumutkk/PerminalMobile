@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
     View,
     Text,
@@ -10,9 +10,11 @@ import {
     Modal,
     Alert,
     TouchableOpacity,
+    RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { Image } from "expo-image";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
 import { useFundSolanaWallet } from "@privy-io/expo/ui";
 import { DepositModal } from "../../components/DepositModal";
@@ -20,7 +22,7 @@ import type { Market } from "../../lib/mock-data";
 import { fetchMarketsForApp } from "../../lib/dflow";
 import { MarketCardNative } from "../../components/MarketCardNative";
 import { getSolBalance, getSolPriceUsd, getUsdcBalance } from "../../lib/solana";
-import { LayoutGrid, Gift, DollarSign, Flame, Tag, X, Wallet } from "lucide-react-native";
+import { LayoutGrid, Gift, DollarSign, Flame, Tag, X, Wallet, Trophy, Star } from "lucide-react-native";
 import { TradePanel } from "../../components/market/TradePanel";
 import { TradeSide } from "../../hooks/useTrade";
 
@@ -61,6 +63,7 @@ export default function HomeFeed() {
     const [balanceError, setBalanceError] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>("Popular");
     const [categories, setCategories] = useState<string[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Trade Modal state
     const [showTradePanel, setShowTradePanel] = useState(false);
@@ -158,27 +161,54 @@ export default function HomeFeed() {
     const [markets, setMarkets] = useState<Market[]>([]);
     const [marketsLoading, setMarketsLoading] = useState(true);
     const [marketsError, setMarketsError] = useState<string | null>(null);
-    useEffect(() => {
-        let c = false;
-        setMarketsLoading(true);
+
+    const loadMarkets = useCallback(async () => {
         setMarketsError(null);
-        fetchMarketsForApp({ limit: 100, sort: "volume" })
-            .then(({ markets: list, categories: cats }) => {
-                if (!c) {
-                    setMarkets(list);
-                    setCategories(cats);
-                }
-            })
-            .catch((e) => {
-                if (!c) {
-                    setMarketsError(e instanceof Error ? e.message : "Failed to load markets");
-                    setMarkets([]);
-                    setCategories([]);
-                }
-            })
-            .finally(() => { if (!c) setMarketsLoading(false); });
-        return () => { c = true; };
+        try {
+            const { markets: list, categories: cats } = await fetchMarketsForApp({ limit: 100, sort: "volume" });
+            setMarkets(list);
+            setCategories(cats);
+        } catch (e) {
+            setMarketsError(e instanceof Error ? e.message : "Failed to load markets");
+            setMarkets([]);
+            setCategories([]);
+        } finally {
+            setMarketsLoading(false);
+        }
     }, []);
+
+    const loadBalances = useCallback(async () => {
+        if (!primaryAddress) return;
+        setBalanceLoading(true);
+        try {
+            const [sol, usdc, price] = await Promise.all([
+                getSolBalance(primaryAddress),
+                getUsdcBalance(primaryAddress),
+                getSolPriceUsd(),
+            ]);
+            setSolBalance(sol);
+            setUsdcBalance(usdc);
+            setSolPriceUsd(price);
+        } catch (e) {
+            setBalanceError(e instanceof Error ? e.message : "Failed to load balance");
+        } finally {
+            setBalanceLoading(false);
+        }
+    }, [primaryAddress]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await Promise.all([loadMarkets(), loadBalances()]);
+        setRefreshing(false);
+    }, [loadMarkets, loadBalances]);
+
+    useEffect(() => {
+        loadMarkets();
+    }, [loadMarkets]);
+
+    useEffect(() => {
+        loadBalances();
+    }, [loadBalances]);
 
     const solUsdValue =
         solBalance != null && solPriceUsd != null ? solBalance * solPriceUsd : null;
@@ -201,56 +231,54 @@ export default function HomeFeed() {
             {/* Top bar: logo left, handle center, gift right */}
             <View style={styles.topBar}>
                 <View style={styles.logoContainer}>
-                    <LayoutGrid color="#a855f7" size={24} strokeWidth={2} />
+                    <Image
+                        source={require("../../assets/app-logo.png")}
+                        style={styles.logoImage}
+                        contentFit="contain"
+                    />
                 </View>
                 <Text style={styles.handleText} numberOfLines={1}>
-                    {primaryAddress ? headerLabel : "Wallet"}
+                    {primaryAddress ? headerLabel : "@adilcreates"}
                 </Text>
-                <Pressable style={styles.giftButton} hitSlop={12}>
-                    <Gift color="#9ca3af" size={24} strokeWidth={2} />
+                <Pressable style={styles.giftIconButton} hitSlop={12}>
+                    <Gift color="#fff" size={20} strokeWidth={2.5} />
                 </Pressable>
             </View>
 
-            {/* Portfolio + Cash cards side by side */}
-            <View style={styles.balanceRow}>
-                <View style={styles.portfolioCard}>
-                    <Text style={styles.cardLabel}>Portfolio</Text>
+            {/* Redesigned Stats Row: Positions | Cash | Deposit */}
+            <View style={styles.statsRow}>
+                <View style={styles.statColumn}>
+                    <Text style={styles.statLabel}>Positions</Text>
                     {balanceLoading ? (
-                        <ActivityIndicator size="small" color="#a855f7" style={{ marginVertical: 8 }} />
-                    ) : balanceError ? (
-                        <Text style={styles.cardError}>{balanceError}</Text>
+                        <ActivityIndicator size="small" color="#000" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
                     ) : (
-                        <>
-                            <Text style={styles.cardValue}>{formatUsd(portfolioValue)}</Text>
-                            <View style={styles.changeBadge}>
-                                <Text style={styles.changeText}>+0.00%</Text>
-                            </View>
-                        </>
+                        <Text style={styles.statValue}>
+                            ${portfolioValue >= 1000 ? (portfolioValue / 1000).toFixed(1) + "K" : portfolioValue.toFixed(1)}
+                        </Text>
                     )}
                 </View>
-                <View style={styles.cashCard}>
-                    <Text style={styles.cardLabel}>Cash</Text>
-                    {balanceLoading ? (
-                        <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 8 }} />
-                    ) : (
-                        <View style={styles.cashValueRow}>
-                            <Text style={styles.cardValue}>{formatUsd(cashValue)}</Text>
-                            <View style={styles.cashIcon}>
-                                <DollarSign color="#fff" size={16} strokeWidth={2.5} />
-                            </View>
-                        </View>
-                    )}
-                </View>
-            </View>
 
-            <Pressable
-                style={[styles.depositButton, !primaryAddress && styles.depositButtonDisabled]}
-                onPress={handleDeposit}
-                disabled={!primaryAddress}
-            >
-                <Wallet color="#fff" size={20} strokeWidth={2} />
-                <Text style={styles.depositButtonText}>Deposit</Text>
-            </Pressable>
+                <View style={styles.statDivider} />
+
+                <View style={styles.statColumn}>
+                    <Text style={styles.statLabel}>Cash</Text>
+                    {balanceLoading ? (
+                        <ActivityIndicator size="small" color="#000" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                    ) : (
+                        <Text style={styles.statValue}>
+                            ${cashValue >= 1000 ? (cashValue / 1000).toFixed(1) + "K" : cashValue.toFixed(1)}
+                        </Text>
+                    )}
+                </View>
+
+                <TouchableOpacity
+                    style={styles.depositAction}
+                    onPress={handleDeposit}
+                    disabled={!primaryAddress}
+                >
+                    <Text style={styles.depositActionText}>Deposit</Text>
+                </TouchableOpacity>
+            </View>
 
             {/* Category filters: Popular + DFlow categories */}
             <ScrollView
@@ -260,11 +288,17 @@ export default function HomeFeed() {
                 style={styles.categoryScrollView}
             >
                 <Pressable
+                    style={[styles.categoryPill, styles.starPill]}
+                    onPress={() => setSelectedCategory("Popular")}
+                >
+                    <Star color="#fff" size={16} strokeWidth={2.5} fill="#fff" />
+                </Pressable>
+
+                <Pressable
                     style={[styles.categoryPill, selectedCategory === "Popular" && styles.categoryPillActive]}
                     onPress={() => setSelectedCategory("Popular")}
                 >
-                    <Flame color={selectedCategory === "Popular" ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} style={styles.categoryIcon} />
-                    <Text style={[styles.categoryPillText, selectedCategory === "Popular" && styles.categoryPillTextActive]}>Popular</Text>
+                    <Text style={[styles.categoryPillText, selectedCategory === "Popular" && styles.categoryPillTextActive]}>All</Text>
                 </Pressable>
                 {categories.map((cat) => {
                     const isSelected = selectedCategory === cat;
@@ -274,7 +308,7 @@ export default function HomeFeed() {
                             style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
                             onPress={() => setSelectedCategory(cat)}
                         >
-                            <Tag color={isSelected ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} style={styles.categoryIcon} />
+                            <Tag color={isSelected ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} />
                             <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>{cat}</Text>
                         </Pressable>
                     );
@@ -303,6 +337,15 @@ export default function HomeFeed() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListHeaderComponent={renderHeader}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor="#a855f7"
+                        colors={["#a855f7"]}
+                        progressBackgroundColor="#111"
+                    />
+                }
                 ListEmptyComponent={
                     !marketsLoading ? (
                         <View style={styles.emptyMarkets}>
@@ -377,139 +420,106 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: "#111",
-        borderWidth: 1,
-        borderColor: "#222",
+        backgroundColor: "#000",
         alignItems: "center",
         justifyContent: "center",
+        overflow: "hidden",
+    },
+    logoImage: {
+        width: "100%",
+        height: "100%",
     },
     handleText: {
         flex: 1,
         color: "#fff",
-        fontSize: 16,
-        fontWeight: "600",
+        fontSize: 18,
+        fontWeight: "800",
         textAlign: "center",
         marginHorizontal: 8,
     },
-    giftButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
+    giftIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
         backgroundColor: "#111",
         borderWidth: 1,
         borderColor: "#222",
         alignItems: "center",
         justifyContent: "center",
     },
-    balanceRow: {
-        flexDirection: "row",
-        gap: 12,
-        marginBottom: 12,
-    },
-    depositButton: {
+    statsRow: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        backgroundColor: "#3b0764",
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 14,
+        backgroundColor: "#111",
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 16,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: "#6b21a8",
-    },
-    depositButtonDisabled: {
-        opacity: 0.5,
-    },
-    depositButtonText: {
-        color: "#fff",
-        fontSize: 16,
-        fontWeight: "700",
-    },
-    portfolioCard: {
-        flex: 1,
-        backgroundColor: "#111",
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
         borderColor: "#222",
     },
-    cashCard: {
+    statColumn: {
         flex: 1,
-        backgroundColor: "#111",
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "#222",
     },
-    cardLabel: {
-        color: "#6b7280",
-        fontSize: 13,
+    statLabel: {
+        color: "#666",
+        fontSize: 12,
         fontWeight: "600",
-        marginBottom: 6,
+        marginBottom: 4,
     },
-    cardValue: {
+    statValue: {
         color: "#fff",
-        fontSize: 22,
-        fontWeight: "bold",
+        fontSize: 24,
+        fontWeight: "900",
     },
-    cardError: {
-        color: "#ef4444",
-        fontSize: 12,
+    statDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: "#333",
+        marginHorizontal: 16,
     },
-    changeBadge: {
-        alignSelf: "flex-start",
-        marginTop: 6,
-    },
-    changeText: {
-        color: "#10b981",
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    cashValueRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    cashIcon: {
-        width: 28,
-        height: 28,
+    depositAction: {
+        backgroundColor: "#fff",
+        paddingVertical: 12,
+        paddingHorizontal: 24,
         borderRadius: 14,
-        backgroundColor: "#3b82f6",
-        alignItems: "center",
-        justifyContent: "center",
+    },
+    depositActionText: {
+        color: "#000",
+        fontSize: 18,
+        fontWeight: "800",
     },
     categoryScrollView: {
         marginHorizontal: -16,
     },
     categoryScroll: {
         paddingHorizontal: 16,
-        gap: 10,
+        gap: 8,
         flexDirection: "row",
-        marginBottom: 20,
+        marginBottom: 24,
     },
     categoryPill: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingVertical: 10,
+        height: 36,
         paddingHorizontal: 16,
-        borderRadius: 20,
+        borderRadius: 18,
         backgroundColor: "#111",
+        alignItems: "center",
+        justifyContent: "center",
         borderWidth: 1,
         borderColor: "#222",
     },
-    categoryPillActive: {
-        backgroundColor: "#3b0764",
-        borderColor: "#6b21a8",
+    starPill: {
+        width: 36,
+        paddingHorizontal: 0,
     },
-    categoryIcon: {
-        marginRight: 6,
+    categoryPillActive: {
+        backgroundColor: "#22c55e",
+        borderColor: "#22c55e",
     },
     categoryPillText: {
-        color: "#9ca3af",
+        color: "#999",
         fontSize: 14,
-        fontWeight: "600",
+        fontWeight: "700",
     },
     categoryPillTextActive: {
         color: "#fff",

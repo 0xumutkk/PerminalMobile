@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { FeedPost } from "../../hooks/useFeed";
 import { formatTimeAgo } from "../../lib/utils";
-import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal } from "lucide-react-native";
+import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal, ArrowUp, ArrowDown } from "lucide-react-native";
 import { useInteractions } from "../../hooks/useInteractions";
 
 interface PostCardProps {
@@ -50,27 +50,26 @@ export function PostCard({ post }: PostCardProps) {
 
     return (
         <View style={styles.container}>
-            <View style={styles.contentContainer}>
-                {/* Avatar */}
-                <TouchableOpacity style={styles.avatarContainer}>
-                    {post.author?.avatar_url ? (
-                        <Image
-                            source={{ uri: post.author.avatar_url }}
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={styles.avatarFallback}>
-                            <Text style={styles.avatarFallbackText}>
-                                {(post.author?.username || "U").charAt(0).toUpperCase()}
-                            </Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
+            <View style={styles.postBody}>
+                {/* Header Row */}
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.avatarContainer}>
+                        {post.author?.avatar_url ? (
+                            <Image
+                                source={{ uri: post.author.avatar_url }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={styles.avatarFallback}>
+                                <Text style={styles.avatarFallbackText}>
+                                    {(post.author?.username || "U").charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
 
-                <View style={styles.rightColumn}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <View style={styles.headerInfo}>
+                    <View style={styles.headerTextCol}>
+                        <View style={styles.nameRow}>
                             <Text style={styles.displayName} numberOfLines={1}>
                                 {post.author?.display_name || post.author?.username || "User"}
                             </Text>
@@ -80,48 +79,60 @@ export function PostCard({ post }: PostCardProps) {
                             <Text style={styles.dot}>·</Text>
                             <Text style={styles.timeAgo}>{timeAgo}</Text>
                         </View>
-                        <TouchableOpacity style={styles.moreButton}>
-                            <MoreHorizontal size={16} color="#6b7280" />
-                        </TouchableOpacity>
                     </View>
+                </View>
 
-                    {/* Market Context */}
-                    {post.market_slug && (
-                        <View style={styles.marketBadge}>
-                            <Text style={styles.marketText}>
-                                Market: {post.market_question || "Prediction Market"}
-                            </Text>
+                {/* Content */}
+                <Text style={styles.postText}>{post.content}</Text>
+
+                {/* Integrated Market Card - Only show if market data exists */}
+                {post.market_slug && (
+                    <View style={styles.integratedMarketCard}>
+                        <View style={styles.marketTop}>
+                            <View style={styles.marketImageWrap}>
+                                <Image
+                                    source="https://api.dicebear.com/7.x/identicon/svg?seed=market"
+                                    style={styles.marketImage}
+                                />
+                            </View>
+                            <View style={styles.marketMeta}>
+                                <Text style={styles.marketQuestion} numberOfLines={2}>
+                                    {post.market_question || "Prediction Market"}
+                                </Text>
+                            </View>
                         </View>
-                    )}
 
-                    {/* Content */}
-                    <Text style={styles.content}>{post.content}</Text>
-
-                    {/* Actions */}
-                    <View style={styles.actions}>
-                        {/* Comments */}
-                        <TouchableOpacity style={styles.actionButton}>
-                            <MessageCircle size={18} color="#6b7280" />
-                            <Text style={styles.actionText}>{post.comments_count || 0}</Text>
-                        </TouchableOpacity>
-
-                        {/* Repost */}
-                        <TouchableOpacity style={styles.actionButton} onPress={handleRepost}>
-                            <Repeat2 size={18} color={reposted ? "#10b981" : "#6b7280"} />
-                            <Text style={[styles.actionText, reposted && { color: "#10b981" }]}>{repostsCount || 0}</Text>
-                        </TouchableOpacity>
-
-                        {/* Like */}
-                        <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-                            <Heart size={18} color={liked ? "#f43f5e" : "#6b7280"} fill={liked ? "#f43f5e" : "transparent"} />
-                            <Text style={[styles.actionText, liked && { color: "#f43f5e" }]}>{likesCount || 0}</Text>
-                        </TouchableOpacity>
-
-                        {/* Share */}
-                        <TouchableOpacity style={styles.actionButton}>
-                            <Share2 size={18} color="#6b7280" />
-                        </TouchableOpacity>
+                        <View style={styles.marketFooter}>
+                            <View style={styles.entryRow}>
+                                <Text style={styles.entryLabel}>Prediction Market</Text>
+                            </View>
+                            <TouchableOpacity style={styles.inlineTradeButton}>
+                                <Text style={styles.inlineTradeText}>Trade</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
+                )}
+
+                {/* Actions */}
+                <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.actionItem} onPress={handleLike}>
+                        <ArrowUp size={20} color={liked ? "#22c55e" : "#6b7280"} />
+                        <Text style={[styles.actionLabel, { color: liked ? '#22c55e' : '#6b7280' }]}>
+                            {likesCount || 0}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionItem}>
+                        <ArrowDown size={20} color="#6b7280" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionItem} onPress={handleRepost}>
+                        <Repeat2 size={20} color={reposted ? "#10b981" : "#6b7280"} />
+                        <Text style={[styles.actionLabel, { color: reposted ? '#10b981' : '#6b7280' }]}>
+                            {repostsCount || 0}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionItem}>
+                        <Share2 size={20} color="#6b7280" />
+                    </TouchableOpacity>
                 </View>
             </View>
         </View>
@@ -135,104 +146,255 @@ const styles = StyleSheet.create({
         padding: 12,
         backgroundColor: "#000",
     },
-    contentContainer: {
+    postBody: {
+        width: "100%",
+    },
+    header: {
         flexDirection: "row",
+        alignItems: "flex-start",
+        marginBottom: 12,
     },
     avatarContainer: {
-        marginRight: 12,
+        marginRight: 10,
     },
     avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: "#1e293b",
+        width: 36,
+        height: 36,
+        borderRadius: 18,
     },
     avatarFallback: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: "rgba(6, 78, 59, 0.5)", // emerald-900/50
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: "#1a1a1a",
         alignItems: "center",
         justifyContent: "center",
     },
     avatarFallbackText: {
-        color: "#34d399", // emerald-400
+        color: "#6b7280",
+        fontSize: 14,
         fontWeight: "bold",
-        fontSize: 16,
     },
-    rightColumn: {
+    headerTextCol: {
         flex: 1,
+        gap: 2,
     },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 4,
-    },
-    headerInfo: {
+    nameRow: {
         flexDirection: "row",
         alignItems: "center",
-        flex: 1,
+        gap: 4,
     },
     displayName: {
-        color: "#f1f5f9", // slate-100
-        fontWeight: "bold",
-        fontSize: 15,
-        marginRight: 4,
-        maxWidth: 120, // Limit width to prevent overflow
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "800",
     },
     username: {
-        color: "#64748b", // slate-500
+        color: "#6b7280",
         fontSize: 14,
-        marginRight: 4,
-        maxWidth: 100,
+        fontWeight: "600",
     },
     dot: {
-        color: "#64748b",
+        color: "#444",
         fontSize: 14,
-        marginRight: 4,
     },
     timeAgo: {
-        color: "#64748b",
+        color: "#6b7280",
         fontSize: 14,
+        fontWeight: "500",
     },
-    moreButton: {
-        padding: 4,
+    tagRow: {
+        flexDirection: "row",
     },
-    marketBadge: {
-        backgroundColor: "rgba(2, 44, 34, 0.3)", // emerald-950/30
-        borderWidth: 1,
-        borderColor: "rgba(16, 185, 129, 0.2)", // emerald-500/20
-        paddingHorizontal: 6,
+    statusTag: {
+        paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 4,
-        alignSelf: "flex-start",
-        marginBottom: 8,
     },
-    marketText: {
-        color: "#34d399", // emerald-400
-        fontSize: 12,
+    statusTagText: {
+        fontSize: 11,
+        fontWeight: "800",
     },
-    content: {
-        color: "#e2e8f0", // slate-200
+    profitPercent: {
+        color: "#22c55e",
+        fontSize: 18,
+        fontWeight: "900",
+    },
+    postText: {
+        color: "#e2e8f0",
         fontSize: 15,
-        lineHeight: 20,
-        marginBottom: 12,
+        lineHeight: 22,
+        marginBottom: 16,
+        fontWeight: "500",
     },
-    actions: {
+    integratedMarketCard: {
+        backgroundColor: "rgba(59, 130, 246, 0.05)",
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: "#3b82f6",
+        padding: 16,
+        marginBottom: 16,
+    },
+    marketTop: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 16,
+    },
+    marketImageWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        overflow: "hidden",
+        backgroundColor: "#1a1a1a",
+    },
+    marketImage: {
+        width: "100%",
+        height: "100%",
+    },
+    marketMeta: {
+        flex: 1,
+    },
+    marketQuestion: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "800",
+        lineHeight: 20,
+    },
+    gaugeContainerMini: {
+        width: 44,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    gaugeBackgroundMini: {
+        position: "absolute",
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 3,
+        borderColor: "rgba(255,255,255,0.1)",
+    },
+    gaugeFillMini: {
+        position: "absolute",
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 3,
+        borderColor: "#22c55e",
+        borderTopColor: "transparent",
+        borderRightColor: "transparent",
+    },
+    gaugeTextMini: {
+        color: "#fff",
+        fontSize: 10,
+        fontWeight: "900",
+    },
+    marketDetails: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 16,
+    },
+    sidePill: {
+        backgroundColor: "rgba(34, 197, 94, 0.2)",
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    sideText: {
+        color: "#22c55e",
+        fontSize: 20,
+        fontWeight: "900",
+    },
+    sharesCol: {
+        flex: 1,
+    },
+    sharesLabel: {
+        color: "#fff",
+        fontSize: 18,
+        fontWeight: "800",
+    },
+    sharesValue: {
+        color: "#ccc",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    marketFooter: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "rgba(59, 130, 246, 0.8)",
+        marginHorizontal: -16,
+        padding: 16,
+    },
+    entryRow: {
+        flexDirection: "row",
+        gap: 20,
+    },
+    entryLabel: {
+        color: "rgba(255,255,255,0.7)",
+        fontSize: 12,
+        fontWeight: "800",
+    },
+    entryValue: {
+        color: "#fff",
+        fontSize: 20,
+        fontWeight: "900",
+    },
+    inlineTradeButton: {
+        backgroundColor: "#111",
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    inlineTradeText: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "900",
+    },
+    marketSocial: {
+        marginTop: 12,
+    },
+    socialAvatarStackMini: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    miniAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: "#3b82f6",
+    },
+    miniAvatarMore: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: "#222",
+        marginLeft: -10,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "#3b82f6",
+    },
+    miniAvatarMoreText: {
+        color: "#fff",
+        fontSize: 10,
+        fontWeight: "800",
+    },
+    actionRow: {
         flexDirection: "row",
         justifyContent: "space-between",
-        maxWidth: "90%",
+        paddingHorizontal: 4,
     },
-    actionButton: {
+    actionItem: {
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
-        paddingVertical: 4,
     },
-    actionText: {
-        color: "#64748b", // slate-500
-        fontSize: 13,
-        marginLeft: 4,
+    actionLabel: {
+        fontSize: 14,
+        fontWeight: "800",
     },
 });

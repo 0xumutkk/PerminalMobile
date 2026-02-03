@@ -47,18 +47,18 @@ export default function AppLayout() {
                     }}
                 />
                 <Tabs.Screen
-                    name="portfolio/index"
+                    name="leaderboard/index"
                     options={{
-                        title: "Portfolio",
+                        title: "Leaderboard",
                         tabBarIcon: ({ focused }) => (
                             <TabIcon focused={focused} Icon={ArrowUpCircle} />
                         ),
                     }}
                 />
                 <Tabs.Screen
-                    name="markets/index"
+                    name="explore/index"
                     options={{
-                        title: "Markets",
+                        title: "Explore",
                         tabBarIcon: ({ focused }) => (
                             <TabIcon focused={focused} Icon={Globe} />
                         ),

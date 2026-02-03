@@ -20,6 +20,8 @@ export interface Database {
                     followers_count: number;
                     following_count: number;
                     trades_count: number;
+                    pnl: number;
+                    win_rate: number;
                     created_at: string;
                     updated_at: string;
                 };
@@ -33,6 +35,8 @@ export interface Database {
                     followers_count?: number;
                     following_count?: number;
                     trades_count?: number;
+                    pnl?: number;
+                    win_rate?: number;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -46,6 +50,8 @@ export interface Database {
                     followers_count?: number;
                     following_count?: number;
                     trades_count?: number;
+                    pnl?: number;
+                    win_rate?: number;
                     created_at?: string;
                     updated_at?: string;
                 };

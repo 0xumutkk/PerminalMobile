@@ -12,13 +12,12 @@ import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
 import { supabase } from "../../../lib/supabase";
-import type { Profile } from "../../../lib/supabase-types";
-import { LayoutGrid, User, BarChart3, Trophy } from "lucide-react-native";
+import { Profile } from "../../../lib/database.types";
+import { LayoutGrid, User, BarChart3, Trophy, Gift, Star } from "lucide-react-native";
 
 function formatPnl(value: number): string {
     const abs = Math.abs(value);
     const sign = value >= 0 ? "+" : "-";
-    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
     if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
     return `${sign}$${abs.toFixed(2)}`;
 }
@@ -44,12 +43,13 @@ function LeaderboardRow({
     onPress?: () => void;
 }) {
     const pnl = profile.pnl ?? 0;
-    const winRate = profile.win_rate ?? 0;
     const isPositive = pnl >= 0;
 
     return (
         <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={onPress}>
-            <RankBadge rank={rank} />
+            <View style={styles.rankBadgeCell}>
+                <RankBadge rank={rank} />
+            </View>
             <View style={styles.avatarWrap}>
                 {profile.avatar_url ? (
                     <Image
@@ -65,16 +65,19 @@ function LeaderboardRow({
             </View>
             <View style={styles.nameCol}>
                 <Text style={styles.displayName} numberOfLines={1}>
-                    {profile.display_name || profile.username}
+                    {profile.display_name || profile.username || "Anonymous"}
                 </Text>
-                <Text style={styles.handle}>@{profile.username}</Text>
+                <Text style={styles.handle}>@{profile.username || "user"}</Text>
             </View>
-            <Text style={[styles.pnl, isPositive ? styles.pnlPositive : styles.pnlNegative]}>
-                {formatPnl(pnl)}
-            </Text>
-            <View style={styles.winRateWrap}>
-                <Trophy color="#9ca3af" size={14} strokeWidth={2} />
-                <Text style={styles.winRateText}>{Math.round(winRate)}</Text>
+            <View style={styles.pnlCol}>
+                <Text style={[styles.pnl, isPositive ? styles.pnlPositive : styles.pnlNegative]}>
+                    {formatPnl(pnl)}
+                </Text>
+                <View style={styles.miniAvatarStack}>
+                    <View style={[styles.miniAvatar, { backgroundColor: '#3b82f6', zIndex: 3 }]} />
+                    <View style={[styles.miniAvatar, { backgroundColor: '#10b981', zIndex: 2, marginLeft: -6 }]} />
+                    <Text style={styles.miniAvatarCount}>+14</Text>
+                </View>
             </View>
         </Pressable>
     );
@@ -98,13 +101,15 @@ export default function LeaderboardScreen() {
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
-        setError(null);
-        supabase
-            .from("profiles")
-            .select("id, wallet_address, username, display_name, avatar_url, pnl, win_rate")
-            .order("pnl", { ascending: false })
-            .then(({ data, error: err }) => {
+        (async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const { data, error: err } = await supabase
+                    .from("profiles")
+                    .select("id, wallet_address, username, display_name, avatar_url, pnl, win_rate")
+                    .order("pnl", { ascending: false });
+
                 if (cancelled) return;
                 if (err) {
                     setError(err.message);
@@ -112,10 +117,10 @@ export default function LeaderboardScreen() {
                     return;
                 }
                 setProfiles((data as Profile[]) ?? []);
-            })
-            .finally(() => {
+            } finally {
                 if (!cancelled) setLoading(false);
-            });
+            }
+        })();
         return () => {
             cancelled = true;
         };
@@ -154,8 +159,8 @@ export default function LeaderboardScreen() {
             .in("follower_id", myProfileIds)
             .then(({ data }) => {
                 if (cancelled) return;
-                const ids = [...new Set((data ?? []).map((r) => r.following_id))];
-                setFollowingIds(ids);
+                const ids = (data ?? []).map((r: any) => r.following_id);
+                setFollowingIds([...new Set(ids)]);
             });
         return () => { cancelled = true; };
     }, [myProfileIds.join(","), followRefreshKey]);
@@ -178,17 +183,16 @@ export default function LeaderboardScreen() {
         <>
             <View style={styles.header}>
                 <View style={styles.logoContainer}>
-                    <LayoutGrid color="#a855f7" size={24} strokeWidth={2} />
+                    <Image
+                        source={require("../../../assets/app-logo.png")}
+                        style={styles.logoImage}
+                        contentFit="contain"
+                    />
                 </View>
                 <Text style={styles.headerTitle}>Leaderboard</Text>
-                <View style={styles.headerRight}>
-                    <Pressable style={styles.headerIcon} hitSlop={12}>
-                        <LayoutGrid color="#9ca3af" size={22} strokeWidth={2} />
-                    </Pressable>
-                    <Pressable style={styles.headerIcon} hitSlop={12} onPress={() => router.push("/profile")}>
-                        <User color="#9ca3af" size={22} strokeWidth={2} />
-                    </Pressable>
-                </View>
+                <Pressable style={styles.giftIconButton} hitSlop={12}>
+                    <Gift color="#fff" size={20} strokeWidth={2.5} />
+                </Pressable>
             </View>
 
             <View style={styles.tabs}>
@@ -209,24 +213,37 @@ export default function LeaderboardScreen() {
             </View>
 
             <View style={styles.yourRankCard}>
-                <BarChart3 color="#9ca3af" size={20} strokeWidth={2} />
-                <View style={styles.yourRankContent}>
+                <View style={styles.yourRankTop}>
+                    <BarChart3 color="#6b7280" size={16} strokeWidth={2.5} />
                     <Text style={styles.yourRankLabel}>Your rank</Text>
-                    <View style={styles.yourRankRow}>
+                </View>
+                <View style={styles.yourRankContent}>
+                    <View style={styles.yourRankProfile}>
+                        {myProfile?.avatar_url ? (
+                            <Image
+                                source={{ uri: myProfile.avatar_url }}
+                                style={styles.yourRankAvatar}
+                                contentFit="cover"
+                            />
+                        ) : (
+                            <View style={styles.yourRankAvatarPlaceholder}>
+                                <User color="#6b7280" size={16} />
+                            </View>
+                        )}
                         <Text style={styles.yourRankNumber}>
                             {myRank != null ? `#${myRank.toLocaleString()}` : "—"}
                         </Text>
-                        {myPnl != null && (
-                            <Text
-                                style={[
-                                    styles.yourRankPnl,
-                                    myPnl >= 0 ? styles.pnlPositive : styles.pnlNegative,
-                                ]}
-                            >
-                                {formatPnl(myPnl)}
-                            </Text>
-                        )}
                     </View>
+                    {myPnl != null && (
+                        <Text
+                            style={[
+                                styles.yourRankPnl,
+                                myPnl >= 0 ? styles.pnlPositive : styles.pnlNegative,
+                            ]}
+                        >
+                            {formatPnl(myPnl)}
+                        </Text>
+                    )}
                 </View>
             </View>
 
@@ -297,13 +314,24 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "#1a1a1a",
     },
     logoContainer: {
         width: 40,
         height: 40,
         borderRadius: 12,
+        backgroundColor: "#000",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+    },
+    logoImage: {
+        width: "100%",
+        height: "100%",
+    },
+    giftIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
         backgroundColor: "#111",
         borderWidth: 1,
         borderColor: "#222",
@@ -341,50 +369,67 @@ const styles = StyleSheet.create({
         borderBottomColor: "transparent",
     },
     tabActive: {
-        borderBottomColor: "#a855f7",
+        borderBottomColor: "#fff",
     },
     tabText: {
         color: "#6b7280",
-        fontSize: 16,
-        fontWeight: "600",
+        fontSize: 18,
+        fontWeight: "800",
     },
     tabTextActive: {
         color: "#fff",
     },
     yourRankCard: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
         marginHorizontal: 16,
         marginTop: 20,
         padding: 16,
         backgroundColor: "#111",
-        borderRadius: 16,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: "#222",
     },
-    yourRankContent: {
-        flex: 1,
+    yourRankTop: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 12,
     },
     yourRankLabel: {
-        color: "#6b7280",
-        fontSize: 13,
-        fontWeight: "600",
-        marginBottom: 4,
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "800",
     },
-    yourRankRow: {
+    yourRankContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    yourRankProfile: {
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
     },
+    yourRankAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+    },
+    yourRankAvatarPlaceholder: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#222",
+        alignItems: "center",
+        justifyContent: "center",
+    },
     yourRankNumber: {
         color: "#fff",
         fontSize: 20,
-        fontWeight: "bold",
+        fontWeight: "900",
     },
     yourRankPnl: {
-        fontSize: 18,
-        fontWeight: "bold",
+        fontSize: 20,
+        fontWeight: "900",
     },
     listHeader: {
         flexDirection: "row",
@@ -408,26 +453,28 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 12,
+        paddingVertical: 16,
         paddingHorizontal: 16,
         gap: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "#111",
     },
     rowPressed: {
-        backgroundColor: "#111",
+        opacity: 0.7,
+    },
+    rankBadgeCell: {
+        width: 32,
+        alignItems: "center",
     },
     rankBadge: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
     },
     rankText: {
-        color: "#fff",
+        color: "#6b7280",
         fontSize: 14,
-        fontWeight: "bold",
+        fontWeight: "800",
     },
     rankTextDark: {
         color: "#1a1a1a",
@@ -464,27 +511,37 @@ const styles = StyleSheet.create({
         fontSize: 13,
         marginTop: 2,
     },
+    pnlCol: {
+        alignItems: "flex-end",
+        gap: 4,
+    },
     pnl: {
-        fontSize: 15,
-        fontWeight: "bold",
-        minWidth: 72,
+        fontSize: 16,
+        fontWeight: "900",
         textAlign: "right",
     },
     pnlPositive: {
-        color: "#10b981",
+        color: "#22c55e",
     },
     pnlNegative: {
         color: "#ef4444",
     },
-    winRateWrap: {
+    miniAvatarStack: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
     },
-    winRateText: {
-        color: "#9ca3af",
-        fontSize: 13,
-        fontWeight: "600",
+    miniAvatar: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#000",
+    },
+    miniAvatarCount: {
+        color: "#6b7280",
+        fontSize: 11,
+        fontWeight: "700",
+        marginLeft: 4,
     },
     empty: {
         paddingVertical: 40,

@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { type Market } from "../lib/mock-data";
 import { useRouter } from "expo-router";
+import { FileText } from "lucide-react-native";
 
 export interface MarketCardNativeProps {
     market: Market;
@@ -31,10 +32,10 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
     // Format volume
     const formattedVolume =
         market.volume >= 1_000_000
-            ? `$${(market.volume / 1_000_000).toFixed(1)}M Vol`
+            ? `$${(market.volume / 1_000_000).toFixed(1)}M`
             : market.volume >= 1_000
-                ? `$${(market.volume / 1_000).toFixed(0)}K Vol`
-                : `$${market.volume} Vol`;
+                ? `$${(market.volume / 1_000).toFixed(0)}K`
+                : `$${market.volume}`;
 
     // Format date
     const formattedResolveDate = market.resolveDate
@@ -52,13 +53,14 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
             ]}
             onPress={() => router.push(`/market/${market.id}`)}
         >
-            <View style={styles.header}>
-                <View style={styles.imageContainer}>
+            {/* Header: Image + Title + RulesIcon */}
+            <View style={styles.topSection}>
+                <View style={styles.marketImageContainer}>
                     {market.imageUrl ? (
                         <Image
                             source={market.imageUrl}
                             contentFit="cover"
-                            style={styles.image as any}
+                            style={styles.marketImage as any}
                             transition={200}
                         />
                     ) : (
@@ -70,54 +72,50 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
                     )}
                 </View>
 
-                <View style={styles.titleContainer}>
-                    <Text style={styles.title} numberOfLines={2}>
+                <View style={styles.titleWrapper}>
+                    <Text style={styles.marketTitle} numberOfLines={2}>
                         {market.title}
                     </Text>
+                </View>
 
-                    <View style={styles.metaRow}>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{market.category}</Text>
-                        </View>
-                        <Text style={styles.metaText}>{formattedVolume}</Text>
-                        <Text style={styles.metaText}>•</Text>
-                        <Text style={styles.metaText}>{formattedResolveDate}</Text>
+                {/* Percentage Gauge */}
+                <View style={styles.gaugeContainer}>
+                    <View style={styles.gaugeBackground}>
+                        <View style={[styles.gaugeFill, { transform: [{ rotate: '45deg' }] }]} />
                     </View>
+                    <Text style={styles.gaugeText}>{yesPercent}%</Text>
+                </View>
+
+                <View style={styles.rulesIcon}>
+                    <FileText color="#999" size={18} />
                 </View>
             </View>
 
-            {/* Progress Bar */}
-            <View style={styles.progressContainer}>
-                <View style={styles.progressBarBackground}>
-                    <View style={[styles.progressYes, { width: `${yesPercent}%` }]} />
-                    <View style={[styles.progressNo, { width: `${noPercent}%` }]} />
-                </View>
-            </View>
-
-            {/* Labels */}
-            <View style={styles.labelRow}>
-                <Text style={styles.yesLabel}>
-                    {yesPercent}% {market.yesLabel || "YES"}
-                </Text>
-                <Text style={styles.noLabel}>
-                    {noPercent}% {market.noLabel || "NO"}
-                </Text>
-            </View>
-
-            {/* Quick Trade Buttons */}
-            <View style={styles.buttonRow}>
+            {/* Binary Trade Row */}
+            <View style={styles.tradeRow}>
                 <Pressable
-                    style={({ pressed }) => [styles.tradeButton, styles.yesButton, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [styles.binaryButton, styles.yesBinary, pressed && { opacity: 0.8 }]}
                     onPress={handleBuyYes}
                 >
-                    <Text style={styles.yesButtonText}>Buy Yes {yesPercent}¢</Text>
+                    <Text style={styles.yesBinaryText}>Yes</Text>
                 </Pressable>
                 <Pressable
-                    style={({ pressed }) => [styles.tradeButton, styles.noButton, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [styles.binaryButton, styles.noBinary, pressed && { opacity: 0.8 }]}
                     onPress={handleBuyNo}
                 >
-                    <Text style={styles.noButtonText}>Buy No {noPercent}¢</Text>
+                    <Text style={styles.noBinaryText}>No</Text>
                 </Pressable>
+            </View>
+
+            {/* Footer: Volume + Avatar Stack */}
+            <View style={styles.footerRow}>
+                <Text style={styles.volumeText}>{formattedVolume} Volume</Text>
+                <View style={styles.avatarStack}>
+                    <View style={[styles.avatar, { backgroundColor: '#3b82f6', zIndex: 3 }]} />
+                    <View style={[styles.avatar, { backgroundColor: '#10b981', zIndex: 2, marginLeft: -8 }]} />
+                    <View style={[styles.avatar, { backgroundColor: '#f59e0b', zIndex: 1, marginLeft: -8 }]} />
+                    <Text style={styles.avatarCount}>+14</Text>
+                </View>
             </View>
         </Pressable>
     );
@@ -125,31 +123,26 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: "#111",
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: "#222",
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#1a1a1a",
     },
     cardPressed: {
-        opacity: 0.9,
-        borderColor: "#333",
+        opacity: 0.7,
     },
-    header: {
+    topSection: {
         flexDirection: "row",
-        gap: 12,
+        alignItems: "center",
+        marginBottom: 12,
     },
-    imageContainer: {
-        width: 60,
-        height: 60,
+    marketImageContainer: {
+        width: 44,
+        height: 44,
         borderRadius: 8,
         overflow: "hidden",
-        backgroundColor: "#222",
-        borderWidth: 1,
-        borderColor: "#333",
+        backgroundColor: "#1a1a1a",
     },
-    image: {
+    marketImage: {
         width: "100%",
         height: "100%",
     },
@@ -161,108 +154,108 @@ const styles = StyleSheet.create({
     },
     placeholderText: {
         color: "#444",
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: "bold",
     },
-    titleContainer: {
+    titleWrapper: {
         flex: 1,
-        justifyContent: "center",
-        gap: 6,
+        marginHorizontal: 12,
     },
-    title: {
+    marketTitle: {
         color: "#fff",
-        fontSize: 14,
-        fontWeight: "600",
-        lineHeight: 20,
+        fontSize: 16,
+        fontWeight: "700",
+        lineHeight: 22,
     },
-    metaRow: {
+    rulesIcon: {
+        padding: 4,
+    },
+    tradeRow: {
         flexDirection: "row",
-        alignItems: "center",
         gap: 8,
+        marginBottom: 16,
     },
-    badge: {
-        backgroundColor: "#1a1a1a",
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: "#333",
+    binaryButton: {
+        flex: 1,
+        height: 48,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    badgeText: {
-        color: "#9ca3af",
-        fontSize: 10,
-        fontWeight: "600",
-        textTransform: "uppercase",
+    yesBinary: {
+        backgroundColor: "rgba(34, 197, 94, 0.25)", // Solidified Green
     },
-    metaText: {
-        color: "#6b7280",
-        fontSize: 11,
+    noBinary: {
+        backgroundColor: "rgba(239, 68, 68, 0.25)", // Solidified Red
     },
-    progressContainer: {
-        marginTop: 16,
+    yesBinaryText: {
+        color: "#22c55e",
+        fontSize: 18,
+        fontWeight: "700",
     },
-    progressBarBackground: {
-        height: 6,
-        width: "100%",
-        backgroundColor: "#1a1a1a",
-        borderRadius: 3,
-        flexDirection: "row",
-        overflow: "hidden",
+    noBinaryText: {
+        color: "#ef4444",
+        fontSize: 18,
+        fontWeight: "700",
     },
-    progressYes: {
-        height: "100%",
-        backgroundColor: "#10b981", // Emerald-500
-    },
-    progressNo: {
-        height: "100%",
-        backgroundColor: "#ef4444", // Rose-500
-    },
-    labelRow: {
+    footerRow: {
         flexDirection: "row",
         justifyContent: "space-between",
-        marginTop: 8,
+        alignItems: "center",
+        paddingTop: 12,
     },
-    yesLabel: {
-        color: "#10b981",
-        fontSize: 12,
+    volumeText: {
+        color: "#666",
+        fontSize: 14,
         fontWeight: "600",
     },
-    noLabel: {
-        color: "#ef4444",
-        fontSize: 12,
-        fontWeight: "600",
-        textAlign: "right",
-        flex: 1,
-    },
-    buttonRow: {
+    avatarStack: {
         flexDirection: "row",
-        gap: 8,
-        marginTop: 16,
+        alignItems: "center",
     },
-    tradeButton: {
-        flex: 1,
-        height: 40,
-        borderRadius: 8,
+    avatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: "#111",
+    },
+    avatarCount: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "700",
+        marginLeft: 6,
+    },
+    gaugeContainer: {
+        width: 48,
+        height: 48,
         alignItems: "center",
         justifyContent: "center",
-        borderWidth: 1,
+        marginRight: 8,
     },
-    yesButton: {
-        backgroundColor: "rgba(16, 185, 129, 0.1)",
-        borderColor: "rgba(16, 185, 129, 0.3)",
+    gaugeBackground: {
+        position: "absolute",
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 4,
+        borderColor: "#1a1a1a",
+        alignItems: "center",
+        justifyContent: "center",
     },
-    noButton: {
-        backgroundColor: "rgba(239, 68, 68, 0.1)",
-        borderColor: "rgba(239, 68, 68, 0.3)",
+    gaugeFill: {
+        position: "absolute",
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 4,
+        borderColor: "#22c55e",
+        borderTopColor: "transparent",
+        borderRightColor: "transparent",
     },
-    yesButtonText: {
-        color: "#10b981",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-    noButtonText: {
-        color: "#ef4444",
-        fontSize: 13,
-        fontWeight: "600",
+    gaugeText: {
+        color: "#fff",
+        fontSize: 11,
+        fontWeight: "800",
     },
 });
