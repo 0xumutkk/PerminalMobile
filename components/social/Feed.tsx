@@ -1,38 +1,30 @@
-import React, { useEffect, useCallback } from "react";
-import { View, FlatList, Text, ActivityIndicator, StyleSheet, RefreshControl } from "react-native";
+import React from "react";
+import { View, FlatList, StyleSheet, RefreshControl, Text, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFeed } from "../../hooks/useFeed";
 import { PostCard } from "./PostCard";
 import { CreatePost } from "./CreatePost";
-import { MessageSquare } from "lucide-react-native";
 
 interface FeedProps {
     userId?: string;
     marketId?: string;
+    ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
 }
 
-export function Feed({ userId, marketId }: FeedProps) {
+export function Feed({ userId, marketId, ListHeaderComponent: CustomListHeaderComponent }: FeedProps) {
     const { posts, isLoading, error, fetchFeed } = useFeed(userId, marketId);
     const [refreshing, setRefreshing] = React.useState(false);
 
-    useEffect(() => {
-        fetchFeed();
-    }, [fetchFeed]);
-
-    const onRefresh = useCallback(async () => {
+    const onRefresh = async () => {
         setRefreshing(true);
         await fetchFeed();
         setRefreshing(false);
-    }, [fetchFeed]);
+    };
 
-    const renderItem = useCallback(({ item }: { item: any }) => (
+    const renderItem = React.useCallback(({ item }: { item: typeof posts[0] }) => (
         <PostCard post={item} />
     ), []);
 
-    const ListHeaderComponent = useCallback(() => (
-        <CreatePost onPostCreated={fetchFeed} />
-    ), [fetchFeed]);
-
-    const ListEmptyComponent = useCallback(() => {
+    const ListEmptyComponent = React.useCallback(() => {
         if (isLoading) {
             return (
                 <View style={styles.centerContainer}>
@@ -40,26 +32,29 @@ export function Feed({ userId, marketId }: FeedProps) {
                 </View>
             );
         }
+
         if (error) {
             return (
                 <View style={styles.centerContainer}>
                     <Text style={styles.errorText}>{error}</Text>
-                    <Text style={styles.retryText} onPress={() => fetchFeed()}>Tap to retry</Text>
+                    <TouchableOpacity onPress={fetchFeed}>
+                        <Text style={styles.retryText}>Tap to retry</Text>
+                    </TouchableOpacity>
                 </View>
             );
         }
+
         return (
             <View style={styles.centerContainer}>
-                <MessageSquare size={48} color="#475569" />
-                <Text style={styles.emptyTitle}>
-                    {marketId ? "No posts about this market yet" : "No posts yet"}
-                </Text>
-                <Text style={styles.emptySubtitle}>
-                    {marketId ? "Be the first to share your thoughts!" : "Be the first to share something!"}
-                </Text>
+                <Text style={styles.emptyTitle}>No posts yet</Text>
+                <Text style={styles.emptySubtitle}>Be the first to share something!</Text>
             </View>
         );
-    }, [isLoading, error, marketId, fetchFeed]);
+    }, [isLoading, error, fetchFeed]);
+
+    const ListHeaderComponent = React.useCallback(() => (
+        <CreatePost onPostCreated={fetchFeed} />
+    ), [fetchFeed]);
 
     return (
         <FlatList
@@ -70,7 +65,7 @@ export function Feed({ userId, marketId }: FeedProps) {
             refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#34d399" />
             }
-            ListHeaderComponent={!userId ? ListHeaderComponent : undefined} // Don't show create post on profile feed? Or do? Maybe show if own profile. For now, show on main feed.
+            ListHeaderComponent={CustomListHeaderComponent || (!userId ? ListHeaderComponent : undefined)}
             ListEmptyComponent={ListEmptyComponent}
         />
     );
@@ -92,17 +87,17 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     retryText: {
-        color: "#94a3b8",
+        color: "#9ca3af",
         textDecorationLine: "underline",
     },
     emptyTitle: {
-        color: "#94a3b8",
+        color: "#9ca3af",
         fontSize: 18,
         fontWeight: "bold",
         marginTop: 16,
     },
     emptySubtitle: {
-        color: "#64748b",
+        color: "#6b7280",
         fontSize: 14,
         marginTop: 4,
     },

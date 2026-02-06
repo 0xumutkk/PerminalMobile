@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
-import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { usePrivy } from "@privy-io/expo";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useTrade } from "../../../hooks/useTrade";
 import { useProfile } from "../../../hooks/useProfile";
 import PortfolioTab from "../../../components/profile/PortfolioTab";
+import { Feed } from "../../../components/social/Feed";
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -15,6 +16,12 @@ export default function ProfileScreen() {
     const { profile, isLoading: profileLoading } = useProfile();
     const { usdcBalance, fetchBalance } = useTrade();
     const [activeTab, setActiveTab] = useState<"Portfolio" | "Posts">("Portfolio");
+
+    const formatCount = (count: number | null | undefined) => {
+        if (!count) return "0";
+        if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+        return count.toString();
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -39,61 +46,55 @@ export default function ProfileScreen() {
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} stickyHeaderIndices={[2]}>
-                {/* Profile Info */}
-                <View style={styles.headerSection}>
-                    <View style={styles.avatarRow}>
-                        <Image
-                            source={profile?.avatar_url ? { uri: profile.avatar_url } : require("../../../assets/icon.png")}
-                            style={styles.avatar}
-                        />
-                        <View style={styles.mainStats}>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>12.3K</Text>
-                                <Text style={styles.statLabel}>Followers</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>33.3K</Text>
-                                <Text style={styles.statLabel}>Following</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>1,3K</Text>
-                                <Text style={styles.statLabel}>Trades</Text>
-                            </View>
+            {/* Profile Header - Fixed at top */}
+            <View style={styles.headerSection}>
+                <View style={styles.avatarRow}>
+                    <Image
+                        source={profile?.avatar_url ? { uri: profile.avatar_url } : require("../../../assets/icon.png")}
+                        style={styles.avatar}
+                    />
+                    <View style={styles.mainStats}>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{formatCount(profile?.followers_count)}</Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{formatCount(profile?.following_count)}</Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statValue}>{formatCount(profile?.trades_count)}</Text>
+                            <Text style={styles.statLabel}>Trades</Text>
                         </View>
                     </View>
-
-                    <Text style={styles.displayName}>{profile?.display_name || profile?.username || "User"}</Text>
-                    <Text style={styles.bio}>{profile?.bio || "Do Everything Great or Die"}</Text>
                 </View>
 
-                {/* Tabs */}
-                <View style={styles.tabContainer}>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === "Portfolio" && styles.activeTab]}
-                        onPress={() => setActiveTab("Portfolio")}
-                    >
-                        <Text style={[styles.tabText, activeTab === "Portfolio" && styles.activeTabText]}>Portfolio</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === "Posts" && styles.activeTab]}
-                        onPress={() => setActiveTab("Posts")}
-                    >
-                        <Text style={[styles.tabText, activeTab === "Posts" && styles.activeTabText]}>Posts</Text>
-                    </TouchableOpacity>
-                </View>
+                <Text style={styles.displayName}>{profile?.display_name || profile?.username || "User"}</Text>
+                <Text style={styles.bio}>{profile?.bio || "Do Everything Great or Die"}</Text>
+            </View>
 
-                {/* Tab Content */}
-                <View style={styles.tabContent}>
-                    {activeTab === "Portfolio" ? (
-                        <PortfolioTab usdcBalance={usdcBalance} onRefresh={fetchBalance} />
-                    ) : (
-                        <View style={styles.emptyContent}>
-                            <Text style={styles.emptyText}>No posts yet</Text>
-                        </View>
-                    )}
-                </View>
-            </ScrollView>
+            {/* Tabs */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === "Portfolio" && styles.activeTab]}
+                    onPress={() => setActiveTab("Portfolio")}
+                >
+                    <Text style={[styles.tabText, activeTab === "Portfolio" && styles.activeTabText]}>Portfolio</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === "Posts" && styles.activeTab]}
+                    onPress={() => setActiveTab("Posts")}
+                >
+                    <Text style={[styles.tabText, activeTab === "Posts" && styles.activeTabText]}>Posts</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Tab Content - takes remaining space */}
+            {activeTab === "Portfolio" ? (
+                <PortfolioTab usdcBalance={usdcBalance} onRefresh={fetchBalance} />
+            ) : (
+                <Feed userId={profile?.id} />
+            )}
         </SafeAreaView>
     );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { Post, Profile } from "../lib/database.types";
 
@@ -42,13 +42,14 @@ export function useFeed(userId?: string, marketId?: string) {
             if (fetchError) throw fetchError;
 
             // Transform data to match FeedPost interface
-            // Note: In a real app with Auth, we would check if *current user* liked/reposted
-            // For now, we default to false
             const feedPosts: FeedPost[] = (data || []).map((post: any) => ({
                 ...post,
                 author: post.author,
-                user_has_liked: false, // TODO: Implement check
-                user_has_reposted: false // TODO: Implement check
+                post_type: post.post_type || 'standard',
+                trade_metadata: post.trade_metadata || {},
+                is_verified: post.is_verified || false,
+                user_has_liked: false, // TODO: Implement real check
+                user_has_reposted: false // TODO: Implement real check
             }));
 
             setPosts(feedPosts);
@@ -59,6 +60,46 @@ export function useFeed(userId?: string, marketId?: string) {
             setIsLoading(false);
         }
     }, [userId, marketId]);
+
+    // Real-time updates
+    useEffect(() => {
+        const channel = supabase
+            .channel('public:posts')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'posts'
+            }, async (payload) => {
+                // When a new post is inserted, fetch its author and add it to the feed
+                const { data: newPost, error: fetchError } = await supabase
+                    .from("posts")
+                    .select(`
+                        *,
+                        author:profiles!user_id(*)
+                    `)
+                    .eq('id', payload.new.id)
+                    .single();
+
+                if (!fetchError && newPost) {
+                    const postData = newPost as any;
+                    const transformedPost: FeedPost = {
+                        ...postData,
+                        author: postData.author,
+                        post_type: postData.post_type || 'standard',
+                        trade_metadata: postData.trade_metadata || {},
+                        is_verified: postData.is_verified || false,
+                        user_has_liked: false,
+                        user_has_reposted: false
+                    };
+                    setPosts(current => [transformedPost, ...current]);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     return { posts, isLoading, error, fetchFeed };
 }

@@ -63,7 +63,15 @@ export function useInteractions() {
         }
     }, [getCurrentUserId]);
 
-    const createPost = useCallback(async (content: string, marketId?: string, marketSlug?: string, marketQuestion?: string) => {
+    const createPost = useCallback(async (
+        content: string,
+        marketId?: string,
+        marketSlug?: string,
+        marketQuestion?: string,
+        postType: string = 'standard',
+        tradeMetadata: any = {},
+        isVerified: boolean = false
+    ) => {
         const userId = getCurrentUserId();
         if (!userId) return null;
 
@@ -76,7 +84,10 @@ export function useInteractions() {
                     content,
                     market_id: marketId,
                     market_slug: marketSlug,
-                    market_question: marketQuestion
+                    market_question: marketQuestion,
+                    post_type: postType,
+                    trade_metadata: tradeMetadata,
+                    is_verified: isVerified
                 } as any)
                 .select()
                 .single();

@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   followers_count INTEGER DEFAULT 0,
   following_count INTEGER DEFAULT 0,
   trades_count INTEGER DEFAULT 0,
+  pnl NUMERIC DEFAULT 0,
+  win_rate NUMERIC DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -150,6 +152,9 @@ CREATE TABLE IF NOT EXISTS public.posts (
   likes_count INTEGER DEFAULT 0,
   reposts_count INTEGER DEFAULT 0,
   comments_count INTEGER DEFAULT 0,
+  post_type TEXT DEFAULT 'standard', -- 'standard', 'trade', 'thesis'
+  trade_metadata JSONB DEFAULT '{}', -- Details about avg_entry, current_price, pnl_percent, side, shares_count
+  is_verified BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

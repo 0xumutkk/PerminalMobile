@@ -88,6 +88,9 @@ export interface Database {
                     likes_count: number;
                     reposts_count: number;
                     comments_count: number;
+                    post_type: string;
+                    trade_metadata: Json;
+                    is_verified: boolean;
                     created_at: string;
                     updated_at: string;
                 };
@@ -102,6 +105,9 @@ export interface Database {
                     likes_count?: number;
                     reposts_count?: number;
                     comments_count?: number;
+                    post_type?: string;
+                    trade_metadata?: Json;
+                    is_verified?: boolean;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -116,6 +122,9 @@ export interface Database {
                     likes_count?: number;
                     reposts_count?: number;
                     comments_count?: number;
+                    post_type?: string;
+                    trade_metadata?: Json;
+                    is_verified?: boolean;
                     created_at?: string;
                     updated_at?: string;
                 };
