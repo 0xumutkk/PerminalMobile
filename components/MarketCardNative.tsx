@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { type Market } from "../lib/mock-data";
 import { useRouter } from "expo-router";
-import { FileText } from "lucide-react-native";
+import { ArrowUpCircle } from "lucide-react-native";
 
 export interface MarketCardNativeProps {
     market: Market;
@@ -10,10 +10,16 @@ export interface MarketCardNativeProps {
     onBuyNo?: (market: Market) => void;
 }
 
+function formatVolume(value: number) {
+    return `$${Math.max(0, Math.round(value)).toLocaleString("en-US")} Vol.`;
+}
+
 export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNativeProps) {
     const router = useRouter();
     const yesPercent = Math.round(market.yesPrice * 100);
-    const noPercent = 100 - yesPercent;
+    const priceDelta = (market.yesPrice - 0.5) * 100;
+    const deltaSign = priceDelta >= 0 ? "+" : "";
+    const isRateOutcomesCard = /fed decision/i.test(market.title);
 
     const handleBuyYes = (e: any) => {
         if (onBuyYes) {
@@ -29,92 +35,147 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
         }
     };
 
-    // Format volume
-    const formattedVolume =
-        market.volume >= 1_000_000
-            ? `$${(market.volume / 1_000_000).toFixed(1)}M`
-            : market.volume >= 1_000
-                ? `$${(market.volume / 1_000).toFixed(0)}K`
-                : `$${market.volume}`;
+    if (isRateOutcomesCard) {
+        const rates = [
+            { label: "50+ bps", probability: "50%" },
+            { label: "25+ bps", probability: "10%" },
+            { label: "No Change", probability: "5%" },
+        ];
 
-    // Format date
-    const formattedResolveDate = market.resolveDate
-        ? new Date(market.resolveDate).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-        })
-        : "TBD";
-
-    return (
-        <Pressable
-            style={({ pressed }) => [
-                styles.card,
-                pressed && styles.cardPressed
-            ]}
-            onPress={() => router.push(`/market/${market.id}`)}
-        >
-            {/* Header: Image + Title + RulesIcon */}
-            <View style={styles.topSection}>
-                <View style={styles.marketImageContainer}>
-                    {market.imageUrl ? (
-                        <Image
-                            source={market.imageUrl}
-                            contentFit="cover"
-                            style={styles.marketImage as any}
-                            transition={200}
-                        />
-                    ) : (
-                        <View style={styles.placeholderImage}>
-                            <Text style={styles.placeholderText}>
-                                {market.category.charAt(0).toUpperCase()}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-
-                <View style={styles.titleWrapper}>
+        return (
+            <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() => router.push(`/market/${market.id}`)}
+            >
+                <View style={styles.rateHeader}>
+                    <View style={styles.marketImageContainer}>
+                        {market.imageUrl ? (
+                            <Image
+                                source={market.imageUrl}
+                                contentFit="cover"
+                                style={styles.marketImage as any}
+                                transition={120}
+                            />
+                        ) : (
+                            <View style={styles.placeholderImage}>
+                                <Text style={styles.placeholderText}>
+                                    {market.category.charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
                     <Text style={styles.marketTitle} numberOfLines={2}>
                         {market.title}
                     </Text>
                 </View>
 
-                {/* Percentage Gauge */}
-                <View style={styles.gaugeContainer}>
-                    <View style={styles.gaugeBackground}>
-                        <View style={[styles.gaugeFill, { transform: [{ rotate: '45deg' }] }]} />
-                    </View>
-                    <Text style={styles.gaugeText}>{yesPercent}%</Text>
+                <View style={styles.rateRows}>
+                    {rates.map((rate) => (
+                        <View style={styles.rateRow} key={rate.label}>
+                            <View style={styles.rateLeft}>
+                                <Text style={styles.rateLabel}>{rate.label}</Text>
+                                {rate.label !== "No Change" ? (
+                                    <ArrowUpCircle color="rgba(0,0,0,0.25)" size={14} strokeWidth={2} />
+                                ) : null}
+                            </View>
+
+                            <View style={styles.rateRight}>
+                                <Text style={styles.rateProbability}>{rate.probability}</Text>
+                                <Pressable
+                                    style={({ pressed }) => [styles.rateYes, pressed && styles.buttonPressed]}
+                                    onPress={handleBuyYes}
+                                >
+                                    <Text style={styles.rateYesText}>Yes</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.rateNo, pressed && styles.buttonPressed]}
+                                    onPress={handleBuyNo}
+                                >
+                                    <Text style={styles.rateNoText}>No</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    ))}
                 </View>
 
-                <View style={styles.rulesIcon}>
-                    <FileText color="#999" size={18} />
+                <View style={styles.footerRow}>
+                    <Text style={styles.volumeText}>{formatVolume(market.volume)}</Text>
+
+                    <View style={styles.crowdSection}>
+                        <View style={styles.crowdStack}>
+                            <View style={[styles.crowdDot, styles.crowdDotYes]} />
+                            <View style={[styles.crowdDot, styles.crowdDotNo]} />
+                        </View>
+                        <Text style={styles.crowdCount}>+14</Text>
+                    </View>
+                </View>
+            </Pressable>
+        );
+    }
+
+    return (
+        <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            onPress={() => router.push(`/market/${market.id}`)}
+        >
+            <View style={styles.topRow}>
+                <View style={styles.titleSection}>
+                    <View style={styles.marketImageContainer}>
+                        {market.imageUrl ? (
+                            <Image
+                                source={market.imageUrl}
+                                contentFit="cover"
+                                style={styles.marketImage as any}
+                                transition={120}
+                            />
+                        ) : (
+                            <View style={styles.placeholderImage}>
+                                <Text style={styles.placeholderText}>
+                                    {market.category.charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
+                    <Text style={styles.marketTitle} numberOfLines={2}>
+                        {market.title}
+                    </Text>
+                </View>
+
+                <View style={styles.statSection}>
+                    <Text style={[styles.deltaText, priceDelta < 0 && styles.deltaTextNegative]}>
+                        {deltaSign}
+                        {Math.abs(priceDelta).toFixed(1)}%
+                    </Text>
+                    <Text style={styles.percentText}>{yesPercent}%</Text>
                 </View>
             </View>
 
-            {/* Binary Trade Row */}
             <View style={styles.tradeRow}>
                 <Pressable
-                    style={({ pressed }) => [styles.binaryButton, styles.yesBinary, pressed && { opacity: 0.8 }]}
+                    style={({ pressed }) => [styles.binaryButton, styles.yesButton, pressed && styles.buttonPressed]}
                     onPress={handleBuyYes}
                 >
-                    <Text style={styles.yesBinaryText}>Yes</Text>
+                    <Text style={styles.yesText}>{market.yesLabel ?? "Yes"}</Text>
                 </Pressable>
+
                 <Pressable
-                    style={({ pressed }) => [styles.binaryButton, styles.noBinary, pressed && { opacity: 0.8 }]}
+                    style={({ pressed }) => [styles.binaryButton, styles.noButton, pressed && styles.buttonPressed]}
                     onPress={handleBuyNo}
                 >
-                    <Text style={styles.noBinaryText}>No</Text>
+                    <Text style={styles.noText}>{market.noLabel ?? "No"}</Text>
                 </Pressable>
             </View>
 
-            {/* Footer: Volume + Avatar Stack */}
             <View style={styles.footerRow}>
-                <Text style={styles.volumeText}>{formattedVolume} Volume</Text>
-                <View style={styles.avatarStack}>
-                    <View style={[styles.avatar, { backgroundColor: '#3b82f6', zIndex: 3 }]} />
-                    <View style={[styles.avatar, { backgroundColor: '#10b981', zIndex: 2, marginLeft: -8 }]} />
-                    <View style={[styles.avatar, { backgroundColor: '#f59e0b', zIndex: 1, marginLeft: -8 }]} />
-                    <Text style={styles.avatarCount}>+14</Text>
+                <Text style={styles.volumeText}>{formatVolume(market.volume)}</Text>
+
+                <View style={styles.crowdSection}>
+                    <View style={styles.crowdStack}>
+                        <View style={[styles.crowdDot, styles.crowdDotYes]} />
+                        <View style={[styles.crowdDot, styles.crowdDotNo]} />
+                    </View>
+                    <Text style={styles.crowdCount}>+14</Text>
                 </View>
             </View>
         </Pressable>
@@ -123,24 +184,35 @@ export function MarketCardNative({ market, onBuyYes, onBuyNo }: MarketCardNative
 
 const styles = StyleSheet.create({
     card: {
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#1a1a1a",
+        backgroundColor: "#fff",
+        borderRadius: 16,
+        paddingTop: 10,
+        paddingBottom: 8,
+        paddingHorizontal: 10,
     },
     cardPressed: {
-        opacity: 0.7,
+        opacity: 0.85,
     },
-    topSection: {
+    topRow: {
         flexDirection: "row",
+        justifyContent: "space-between",
         alignItems: "center",
         marginBottom: 12,
     },
+    titleSection: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        flex: 1,
+        paddingRight: 8,
+    },
     marketImageContainer: {
-        width: 44,
-        height: 44,
+        width: 40,
+        height: 40,
         borderRadius: 8,
         overflow: "hidden",
-        backgroundColor: "#1a1a1a",
+        borderWidth: 1,
+        borderColor: "rgba(0,0,0,0.08)",
     },
     marketImage: {
         width: "100%",
@@ -150,112 +222,178 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#1a1a1a",
+        backgroundColor: "#f2f2f2",
     },
     placeholderText: {
-        color: "#444",
-        fontSize: 18,
-        fontWeight: "bold",
-    },
-    titleWrapper: {
-        flex: 1,
-        marginHorizontal: 12,
+        color: "#8c8c8c",
+        fontSize: 14,
+        fontWeight: "700",
     },
     marketTitle: {
-        color: "#fff",
-        fontSize: 16,
-        fontWeight: "700",
-        lineHeight: 22,
+        flex: 1,
+        color: "#000",
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: "600",
     },
-    rulesIcon: {
-        padding: 4,
+    statSection: {
+        flexDirection: "row",
+        alignItems: "flex-end",
+        gap: 6,
+    },
+    deltaText: {
+        color: "#34c759",
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: "600",
+    },
+    deltaTextNegative: {
+        color: "#ff453a",
+    },
+    percentText: {
+        color: "#000",
+        fontSize: 24,
+        lineHeight: 28,
+        fontWeight: "600",
     },
     tradeRow: {
         flexDirection: "row",
         gap: 8,
-        marginBottom: 16,
+        marginBottom: 10,
     },
     binaryButton: {
         flex: 1,
         height: 48,
-        borderRadius: 12,
+        borderRadius: 16,
         alignItems: "center",
         justifyContent: "center",
     },
-    yesBinary: {
-        backgroundColor: "rgba(34, 197, 94, 0.25)", // Solidified Green
+    buttonPressed: {
+        opacity: 0.85,
     },
-    noBinary: {
-        backgroundColor: "rgba(239, 68, 68, 0.25)", // Solidified Red
+    yesButton: {
+        backgroundColor: "rgba(180,151,90,0.15)",
     },
-    yesBinaryText: {
-        color: "#22c55e",
-        fontSize: 18,
-        fontWeight: "700",
+    noButton: {
+        backgroundColor: "rgba(255,0,0,0.15)",
     },
-    noBinaryText: {
-        color: "#ef4444",
-        fontSize: 18,
-        fontWeight: "700",
+    yesText: {
+        color: "#b4975a",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "500",
+    },
+    noText: {
+        color: "#ff0000",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "500",
     },
     footerRow: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingTop: 12,
     },
-    volumeText: {
-        color: "#666",
-        fontSize: 14,
+    rateHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 12,
+    },
+    rateRows: {
+        gap: 10,
+        marginBottom: 12,
+    },
+    rateRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    rateLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    rateLabel: {
+        color: "rgba(0,0,0,0.4)",
+        fontSize: 12,
+        lineHeight: 16,
         fontWeight: "600",
     },
-    avatarStack: {
+    rateRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    rateProbability: {
+        color: "#000",
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: "600",
+        minWidth: 30,
+        textAlign: "right",
+    },
+    rateYes: {
+        width: 48,
+        height: 24,
+        borderRadius: 8,
+        backgroundColor: "rgba(52,199,89,0.15)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    rateNo: {
+        width: 48,
+        height: 24,
+        borderRadius: 8,
+        backgroundColor: "rgba(255,69,58,0.15)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    rateYesText: {
+        color: "#34c759",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "600",
+    },
+    rateNoText: {
+        color: "#ff453a",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "600",
+    },
+    volumeText: {
+        color: "rgba(0,0,0,0.6)",
+        fontSize: 12,
+        lineHeight: 12,
+        fontWeight: "500",
+    },
+    crowdSection: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    crowdStack: {
         flexDirection: "row",
         alignItems: "center",
     },
-    avatar: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: "#111",
+    crowdDot: {
+        width: 16,
+        height: 16,
+        borderRadius: 4,
+        borderWidth: 0.4,
+        borderColor: "#fff",
     },
-    avatarCount: {
-        color: "#fff",
-        fontSize: 14,
-        fontWeight: "700",
-        marginLeft: 6,
+    crowdDotYes: {
+        backgroundColor: "#34c759",
+        marginRight: -6,
     },
-    gaugeContainer: {
-        width: 48,
-        height: 48,
-        alignItems: "center",
-        justifyContent: "center",
-        marginRight: 8,
+    crowdDotNo: {
+        backgroundColor: "#ff0000",
     },
-    gaugeBackground: {
-        position: "absolute",
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 4,
-        borderColor: "#1a1a1a",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    gaugeFill: {
-        position: "absolute",
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 4,
-        borderColor: "#22c55e",
-        borderTopColor: "transparent",
-        borderRightColor: "transparent",
-    },
-    gaugeText: {
-        color: "#fff",
-        fontSize: 11,
-        fontWeight: "800",
+    crowdCount: {
+        color: "#7d7d7d",
+        fontSize: 12,
+        lineHeight: 12,
+        fontWeight: "500",
     },
 });

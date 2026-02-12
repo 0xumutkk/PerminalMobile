@@ -14,41 +14,41 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Image } from "expo-image";
-import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
+import { useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
 import { useFundSolanaWallet } from "@privy-io/expo/ui";
 import { DepositModal } from "../../components/DepositModal";
 import type { Market } from "../../lib/mock-data";
 import { fetchMarketsForApp } from "../../lib/dflow";
 import { MarketCardNative } from "../../components/MarketCardNative";
 import { getSolBalance, getSolPriceUsd, getUsdcBalance } from "../../lib/solana";
-import { LayoutGrid, Gift, DollarSign, Flame, Tag, X, Wallet, Trophy, Star } from "lucide-react-native";
 import { TradePanel } from "../../components/market/TradePanel";
 import { TradeSide } from "../../hooks/useTrade";
+import { Bell, Flame, Landmark, Trophy, Bitcoin, Plus } from "lucide-react-native";
 
-function shortenAddress(address: string, chars = 4): string {
-    if (!address || address.length < chars * 2 + 2) return address;
-    return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
+function formatCompactMoney(value: number): { whole: string; decimal: string } {
+    const fixed = value.toFixed(2);
+    const [whole, decimal] = fixed.split(".");
+    return {
+        whole: `$${Number(whole).toLocaleString("en-US")}`,
+        decimal: `.${decimal}`,
+    };
 }
 
-function formatUsd(value: number): string {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(value);
+function categoryToIcon(category: string) {
+    const normalized = category.toLowerCase();
+    if (normalized === "popular") return Flame;
+    if (normalized.includes("politic")) return Landmark;
+    if (normalized.includes("sport")) return Trophy;
+    if (normalized.includes("crypto")) return Bitcoin;
+    return null;
 }
 
-function formatUsdc(value: number): string {
-    if (value >= 1) return value.toFixed(2);
-    if (value >= 0.01) return value.toFixed(4);
-    if (value > 0) return value.toFixed(6);
-    return "0";
+function categoryPillLabel(category: string) {
+    if (category === "Popular") return "Popular";
+    return category;
 }
 
 export default function HomeFeed() {
-    const { user } = usePrivy();
     const solanaWallet = useEmbeddedSolanaWallet();
     const { fundWallet } = useFundSolanaWallet();
     const primaryAddress =
@@ -65,7 +65,6 @@ export default function HomeFeed() {
     const [categories, setCategories] = useState<string[]>([]);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Trade Modal state
     const [showTradePanel, setShowTradePanel] = useState(false);
     const [tradingMarket, setTradingMarket] = useState<Market | null>(null);
     const [selectedSide, setSelectedSide] = useState<TradeSide>("YES");
@@ -80,7 +79,6 @@ export default function HomeFeed() {
     const handleTradeSuccess = (signature: string) => {
         Alert.alert("Success", `Trade successful! Signature: ${signature.slice(0, 8)}...`);
         setShowTradePanel(false);
-        // Refresh balance after trade
         if (primaryAddress) {
             getUsdcBalance(primaryAddress).then(setUsdcBalance);
         }
@@ -113,7 +111,6 @@ export default function HomeFeed() {
 
             await fundWallet(options);
 
-            // Refresh balances
             getSolBalance(primaryAddress).then(setSolBalance);
             getUsdcBalance(primaryAddress).then(setUsdcBalance);
         } catch (e) {
@@ -121,42 +118,6 @@ export default function HomeFeed() {
             if (!msg.includes("funding_flow_cancelled")) Alert.alert("Deposit", msg);
         }
     };
-
-    useEffect(() => {
-        if (!primaryAddress) {
-            setSolBalance(null);
-            setUsdcBalance(null);
-            setSolPriceUsd(null);
-            setBalanceError(null);
-            return;
-        }
-        let cancelled = false;
-        setBalanceLoading(true);
-        setBalanceError(null);
-        Promise.all([
-            getSolBalance(primaryAddress),
-            getUsdcBalance(primaryAddress),
-            getSolPriceUsd(),
-        ])
-            .then(([sol, usdc, price]) => {
-                if (!cancelled) {
-                    setSolBalance(sol);
-                    setUsdcBalance(usdc);
-                    setSolPriceUsd(price);
-                }
-            })
-            .catch((e) => {
-                if (!cancelled) {
-                    setBalanceError(e instanceof Error ? e.message : "Failed to load balance");
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setBalanceLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [primaryAddress]);
 
     const [markets, setMarkets] = useState<Market[]>([]);
     const [marketsLoading, setMarketsLoading] = useState(true);
@@ -180,6 +141,7 @@ export default function HomeFeed() {
     const loadBalances = useCallback(async () => {
         if (!primaryAddress) return;
         setBalanceLoading(true);
+        setBalanceError(null);
         try {
             const [sol, usdc, price] = await Promise.all([
                 getSolBalance(primaryAddress),
@@ -212,119 +174,111 @@ export default function HomeFeed() {
 
     const solUsdValue =
         solBalance != null && solPriceUsd != null ? solBalance * solPriceUsd : null;
-    const portfolioValue = (solUsdValue ?? 0) + (usdcBalance != null ? usdcBalance : 0);
-    const cashValue = usdcBalance != null ? usdcBalance : 0;
+    const portfolioValue = (solUsdValue ?? 0) + (usdcBalance ?? 0);
+    const cashValue = usdcBalance ?? 0;
+
+    const portfolioText = formatCompactMoney(portfolioValue);
+    const cashText = formatCompactMoney(cashValue);
+
+    const filterItems = useMemo(() => {
+        const preferred = ["Popular", "Politics", "Sports", "Crypto"];
+        const cleanCategories = categories.filter((cat) => !preferred.includes(cat));
+        return [...preferred, ...cleanCategories];
+    }, [categories]);
 
     const filteredMarkets = useMemo(() => {
         if (selectedCategory === "Popular") return markets;
         return markets.filter((m) => m.category === selectedCategory);
     }, [markets, selectedCategory]);
 
-    const headerLabel =
-        (user?.id && String(user.id).length < 20
-            ? `@${String(user.id).replace(/^.*\./, "").slice(0, 12)}`
-            : null) ??
-        (primaryAddress ? shortenAddress(primaryAddress) : "Wallet");
-
     const renderHeader = () => (
         <View style={styles.headerSection}>
-            {/* Top bar: logo left, handle center, gift right */}
-            <View style={styles.topBar}>
-                <View style={styles.logoContainer}>
-                    <Image
-                        source={require("../../assets/app-logo.png")}
-                        style={styles.logoImage}
-                        contentFit="contain"
-                    />
+            <View style={styles.topCard}>
+                <View style={styles.titleRow}>
+                    <Text style={styles.title}>Home</Text>
+                    <Pressable style={styles.bellButton}>
+                        <Bell size={20} color="#8d8d8d" strokeWidth={1.8} />
+                    </Pressable>
                 </View>
-                <Text style={styles.handleText} numberOfLines={1}>
-                    {primaryAddress ? headerLabel : "@adilcreates"}
-                </Text>
-                <Pressable style={styles.giftIconButton} hitSlop={12}>
-                    <Gift color="#fff" size={20} strokeWidth={2.5} />
-                </Pressable>
+
+                <View style={styles.balanceRow}>
+                    <View style={styles.balanceColumns}>
+                        <View>
+                            <Text style={styles.balanceLabel}>Portfolio</Text>
+                            {balanceLoading ? (
+                                <ActivityIndicator size="small" color="#777" style={styles.balanceLoader} />
+                            ) : (
+                                <Text style={styles.balanceValue}>
+                                    {portfolioText.whole}
+                                    <Text style={styles.balanceValueDecimal}>{portfolioText.decimal}</Text>
+                                </Text>
+                            )}
+                        </View>
+                        <View>
+                            <Text style={styles.balanceLabel}>Cash</Text>
+                            {balanceLoading ? (
+                                <ActivityIndicator size="small" color="#777" style={styles.balanceLoader} />
+                            ) : (
+                                <Text style={styles.balanceValue}>
+                                    {cashText.whole}
+                                    <Text style={styles.balanceValueDecimal}>{cashText.decimal}</Text>
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.depositAction}
+                        onPress={handleDeposit}
+                        disabled={!primaryAddress}
+                    >
+                        <Text style={styles.depositActionText}>Deposit</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            {/* Redesigned Stats Row: Positions | Cash | Deposit */}
-            <View style={styles.statsRow}>
-                <View style={styles.statColumn}>
-                    <Text style={styles.statLabel}>Positions</Text>
-                    {balanceLoading ? (
-                        <ActivityIndicator size="small" color="#000" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
-                    ) : (
-                        <Text style={styles.statValue}>
-                            ${portfolioValue >= 1000 ? (portfolioValue / 1000).toFixed(1) + "K" : portfolioValue.toFixed(1)}
-                        </Text>
-                    )}
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.statColumn}>
-                    <Text style={styles.statLabel}>Cash</Text>
-                    {balanceLoading ? (
-                        <ActivityIndicator size="small" color="#000" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
-                    ) : (
-                        <Text style={styles.statValue}>
-                            ${cashValue >= 1000 ? (cashValue / 1000).toFixed(1) + "K" : cashValue.toFixed(1)}
-                        </Text>
-                    )}
-                </View>
-
-                <TouchableOpacity
-                    style={styles.depositAction}
-                    onPress={handleDeposit}
-                    disabled={!primaryAddress}
-                >
-                    <Text style={styles.depositActionText}>Deposit</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Category filters: Popular + DFlow categories */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryScroll}
                 style={styles.categoryScrollView}
+                contentContainerStyle={styles.categoryScrollContent}
             >
-                <Pressable
-                    style={[styles.categoryPill, styles.starPill]}
-                    onPress={() => setSelectedCategory("Popular")}
-                >
-                    <Star color="#fff" size={16} strokeWidth={2.5} fill="#fff" />
-                </Pressable>
+                {filterItems.map((category) => {
+                    const isSelected = selectedCategory === category;
+                    const Icon = categoryToIcon(category);
 
-                <Pressable
-                    style={[styles.categoryPill, selectedCategory === "Popular" && styles.categoryPillActive]}
-                    onPress={() => setSelectedCategory("Popular")}
-                >
-                    <Text style={[styles.categoryPillText, selectedCategory === "Popular" && styles.categoryPillTextActive]}>All</Text>
-                </Pressable>
-                {categories.map((cat) => {
-                    const isSelected = selectedCategory === cat;
                     return (
                         <Pressable
-                            key={cat}
+                            key={category}
                             style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                            onPress={() => setSelectedCategory(cat)}
+                            onPress={() => setSelectedCategory(category)}
                         >
-                            <Tag color={isSelected ? "#fff" : "#9ca3af"} size={16} strokeWidth={2} />
-                            <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>{cat}</Text>
+                            {Icon ? (
+                                <Icon
+                                    size={16}
+                                    strokeWidth={2}
+                                    color={isSelected ? "#3b82f7" : "rgba(0,0,0,0.4)"}
+                                />
+                            ) : null}
+                            <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
+                                {categoryPillLabel(category)}
+                            </Text>
                         </Pressable>
                     );
                 })}
+
+                <Pressable style={styles.addFilterPill}>
+                    <Plus size={16} color="rgba(0,0,0,0.4)" strokeWidth={2.3} />
+                </Pressable>
             </ScrollView>
 
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{selectedCategory}</Text>
-                <Text style={styles.viewAll}>View All</Text>
-            </View>
+            {balanceError ? <Text style={styles.balanceError}>{balanceError}</Text> : null}
         </View>
     );
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
             <FlatList
                 data={filteredMarkets}
                 renderItem={({ item }) => (
@@ -337,13 +291,14 @@ export default function HomeFeed() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListHeaderComponent={renderHeader}
+                ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor="#a855f7"
-                        colors={["#a855f7"]}
-                        progressBackgroundColor="#111"
+                        tintColor="#8d8d8d"
+                        colors={["#8d8d8d"]}
+                        progressBackgroundColor="#f0f0f0"
                     />
                 }
                 ListEmptyComponent={
@@ -352,31 +307,19 @@ export default function HomeFeed() {
                             <Text style={styles.emptyMarketsText}>
                                 {marketsError ?? "No markets available."}
                             </Text>
-                            {marketsError && (
-                                <Text style={styles.emptyMarketsHint}>
-                                    Check .env: EXPO_PUBLIC_DFLOW_MARKETS_API_URL and EXPO_PUBLIC_DFLOW_API_KEY (pond.dflow.net).
-                                </Text>
-                            )}
                         </View>
                     ) : null
                 }
             />
 
-            {/* Trade Modal */}
             <Modal
                 visible={showTradePanel}
                 animationType="slide"
-                transparent={true}
+                transparent
                 onRequestClose={() => setShowTradePanel(false)}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Trade</Text>
-                            <TouchableOpacity onPress={() => setShowTradePanel(false)} style={styles.closeButton}>
-                                <X color="#fff" size={24} />
-                            </TouchableOpacity>
-                        </View>
                         {tradingMarket && (
                             <TradePanel
                                 market={tradingMarket}
@@ -400,193 +343,164 @@ export default function HomeFeed() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#000",
+        backgroundColor: "#f0f0f0",
     },
     listContent: {
-        padding: 16,
+        paddingHorizontal: 14,
         paddingTop: 8,
+        paddingBottom: 108,
     },
     headerSection: {
-        marginBottom: 20,
+        marginBottom: 10,
     },
-    topBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 20,
-        paddingHorizontal: 4,
-    },
-    logoContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: "#000",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-    },
-    logoImage: {
-        width: "100%",
-        height: "100%",
-    },
-    handleText: {
-        flex: 1,
-        color: "#fff",
-        fontSize: 18,
-        fontWeight: "800",
-        textAlign: "center",
-        marginHorizontal: 8,
-    },
-    giftIconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: "#111",
-        borderWidth: 1,
-        borderColor: "#222",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    statsRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "#111",
-        paddingVertical: 12,
+    topCard: {
+        backgroundColor: "#fff",
+        borderRadius: 24,
         paddingHorizontal: 16,
-        borderRadius: 16,
-        marginBottom: 20,
+        paddingTop: 8,
+        paddingBottom: 14,
         borderWidth: 1,
-        borderColor: "#222",
+        borderColor: "rgba(0,0,0,0.08)",
     },
-    statColumn: {
-        flex: 1,
+    titleRow: {
+        height: 42,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
     },
-    statLabel: {
-        color: "#666",
-        fontSize: 12,
-        fontWeight: "600",
-        marginBottom: 4,
-    },
-    statValue: {
-        color: "#fff",
+    title: {
+        color: "#171717",
         fontSize: 24,
-        fontWeight: "900",
+        lineHeight: 32,
+        fontWeight: "700",
+        letterSpacing: -0.6,
     },
-    statDivider: {
-        width: 1,
-        height: 24,
-        backgroundColor: "#333",
-        marginHorizontal: 16,
+    bellButton: {
+        width: 28,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    balanceRow: {
+        marginTop: 14,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-end",
+    },
+    balanceColumns: {
+        flexDirection: "row",
+        gap: 24,
+    },
+    balanceLabel: {
+        color: "rgba(0,0,0,0.4)",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "600",
+        marginBottom: 8,
+    },
+    balanceValue: {
+        color: "#000",
+        fontSize: 20,
+        lineHeight: 22,
+        fontWeight: "500",
+    },
+    balanceValueDecimal: {
+        color: "rgba(0,0,0,0.4)",
+    },
+    balanceLoader: {
+        marginTop: 8,
     },
     depositAction: {
-        backgroundColor: "#fff",
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 14,
-    },
-    depositActionText: {
-        color: "#000",
-        fontSize: 18,
-        fontWeight: "800",
-    },
-    categoryScrollView: {
-        marginHorizontal: -16,
-    },
-    categoryScroll: {
-        paddingHorizontal: 16,
-        gap: 8,
-        flexDirection: "row",
-        marginBottom: 24,
-    },
-    categoryPill: {
-        height: 36,
-        paddingHorizontal: 16,
-        borderRadius: 18,
-        backgroundColor: "#111",
+        height: 50,
+        minWidth: 142,
+        borderRadius: 16,
+        paddingHorizontal: 18,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,
-        borderColor: "#222",
+        borderColor: "rgba(0,0,0,0.2)",
+        backgroundColor: "#efefef",
     },
-    starPill: {
-        width: 36,
-        paddingHorizontal: 0,
+    depositActionText: {
+        color: "#111",
+        fontSize: 20,
+        lineHeight: 24,
+        fontWeight: "700",
+        letterSpacing: -0.3,
+    },
+    categoryScrollView: {
+        marginTop: 8,
+    },
+    categoryScrollContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingVertical: 2,
+    },
+    categoryPill: {
+        height: 30,
+        borderRadius: 32,
+        paddingLeft: 8,
+        paddingRight: 12,
+        backgroundColor: "rgba(0,0,0,0.05)",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "row",
+        gap: 4,
     },
     categoryPillActive: {
-        backgroundColor: "#22c55e",
-        borderColor: "#22c55e",
+        backgroundColor: "rgba(59,130,247,0.15)",
     },
     categoryPillText: {
-        color: "#999",
+        color: "rgba(0,0,0,0.4)",
         fontSize: 14,
-        fontWeight: "700",
+        lineHeight: 16,
+        fontWeight: "500",
     },
     categoryPillTextActive: {
-        color: "#fff",
+        color: "#3b82f7",
     },
-    sectionHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
+    addFilterPill: {
+        height: 30,
+        minWidth: 30,
+        borderRadius: 32,
+        borderWidth: 1.5,
+        borderColor: "rgba(0,0,0,0.08)",
         alignItems: "center",
-        marginBottom: 16,
+        justifyContent: "center",
+        paddingHorizontal: 8,
     },
-    sectionTitle: {
-        color: "#fff",
-        fontSize: 20,
-        fontWeight: "bold",
-    },
-    viewAll: {
-        color: "#a855f7",
-        fontSize: 14,
-        fontWeight: "600",
+    listSeparator: {
+        borderTopWidth: 1,
+        borderTopColor: "rgba(0,0,0,0.12)",
+        borderStyle: "dashed",
+        marginVertical: 0,
     },
     emptyMarkets: {
         paddingVertical: 40,
         alignItems: "center",
     },
     emptyMarketsText: {
-        color: "#e5e7eb",
+        color: "#6f6f6f",
         fontSize: 15,
         textAlign: "center",
     },
-    emptyMarketsHint: {
-        color: "#6b7280",
-        fontSize: 12,
+    balanceError: {
         marginTop: 8,
-        textAlign: "center",
-        paddingHorizontal: 24,
+        color: "#b42318",
+        fontSize: 12,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: "rgba(0,0,0,0.5)",
+        backgroundColor: "rgba(0,0,0,0.45)",
         justifyContent: "flex-end",
     },
     modalContent: {
+        maxHeight: "92%",
         backgroundColor: "#000",
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: 20,
         paddingBottom: 40,
-        borderTopWidth: 1,
-        borderTopColor: "#333",
-    },
-    modalHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 20,
-    },
-    modalTitle: {
-        color: "#fff",
-        fontSize: 20,
-        fontWeight: "bold",
-    },
-    closeButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: "#222",
-        alignItems: "center",
-        justifyContent: "center",
     },
 });
