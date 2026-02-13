@@ -8,12 +8,20 @@ import {
     Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import { usePrivy, useEmbeddedSolanaWallet, isConnected } from "@privy-io/expo";
 import { supabase } from "../../../lib/supabase";
 import { Profile } from "../../../lib/database.types";
-import { LayoutGrid, User, BarChart3, Trophy, Gift, Star } from "lucide-react-native";
+import {
+    User,
+    Flame,
+    Bitcoin,
+    UserPlus,
+    Award,
+    Bell,
+} from "lucide-react-native";
 
 function formatPnl(value: number): string {
     const abs = Math.abs(value);
@@ -22,13 +30,38 @@ function formatPnl(value: number): string {
     return `${sign}$${abs.toFixed(2)}`;
 }
 
+function formatPnlParts(value: number): { whole: string; decimal: string } | null {
+    if (value === null || value === undefined) return null;
+    const abs = Math.abs(value);
+    const sign = value >= 0 ? "+" : "-";
+    if (abs >= 1_000) return { whole: `${sign}$${(abs / 1_000).toFixed(1)}K`, decimal: "" };
+    const fixed = value.toFixed(2);
+    const [wholePart, decimalPart] = fixed.split(".");
+    return { whole: `${sign}$${wholePart}.`, decimal: decimalPart };
+}
+
+function formatRank(rank: number): string {
+    if (rank >= 1_000) return `#${(rank / 1_000).toFixed(2)}K`;
+    return `#${rank.toLocaleString()}`;
+}
+
 function RankBadge({ rank }: { rank: number }) {
     const isTopThree = rank <= 3;
-    const colors = ["#D4AF37", "#C0C0C0", "#CD7F32"] as const;
-    const bg = isTopThree ? colors[rank - 1] : "#222";
+    if (rank === 1) return <Award size={14} color="#EAB308" fill="#EAB308" />;
+    if (rank === 2) return <Award size={14} color="#94A3B8" fill="#94A3B8" />;
+    if (rank === 3) return <Award size={14} color="#B45309" fill="#B45309" />;
     return (
-        <View style={[styles.rankBadge, { backgroundColor: bg }]}>
-            <Text style={[styles.rankText, isTopThree && styles.rankTextDark]}>{rank}</Text>
+        <View style={styles.rankBadge}>
+            <Text style={styles.rankText}>{rank}</Text>
+        </View>
+    );
+}
+
+function MetricItem({ icon: Icon, value, width }: { icon: any; value: string | number; width?: number }) {
+    return (
+        <View style={[styles.metricItem, width ? { width } : null]}>
+            <Icon size={16} color="rgba(0,0,0,0.6)" strokeWidth={2} />
+            <Text style={styles.metricValue}>{value}</Text>
         </View>
     );
 }
@@ -43,45 +76,68 @@ function LeaderboardRow({
     onPress?: () => void;
 }) {
     const pnl = profile.pnl ?? 0;
+    const tradesCount = profile.trades_count ?? 0;
+    const winRate = profile.win_rate ?? 0;
+    const pnlParts = formatPnlParts(pnl);
     const isPositive = pnl >= 0;
 
     return (
-        <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={onPress}>
+        <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={onPress}
+        >
             <View style={styles.rankBadgeCell}>
-                <RankBadge rank={rank} />
+                <View style={styles.rankContent}>
+                    <Text style={styles.rankText}>{rank}</Text>
+                    {rank <= 3 && <RankBadge rank={rank} />}
+                </View>
             </View>
-            <View style={styles.avatarWrap}>
-                {profile.avatar_url ? (
-                    <Image
-                        source={{ uri: profile.avatar_url }}
-                        style={styles.avatar}
-                        contentFit="cover"
-                    />
-                ) : (
-                    <View style={styles.avatarPlaceholder}>
-                        <User color="#6b7280" size={20} strokeWidth={2} />
+
+            <View style={styles.rowMainContent}>
+                <View style={styles.userInfo}>
+                    <View style={styles.avatarWrap}>
+                        {profile.avatar_url ? (
+                            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+                        ) : (
+                            <View style={styles.avatarPlaceholder}>
+                                <User color="#52525b" size={14} strokeWidth={2} />
+                            </View>
+                        )}
                     </View>
-                )}
-            </View>
-            <View style={styles.nameCol}>
-                <Text style={styles.displayName} numberOfLines={1}>
-                    {profile.display_name || profile.username || "Anonymous"}
-                </Text>
-                <Text style={styles.handle}>@{profile.username || "user"}</Text>
-            </View>
-            <View style={styles.pnlCol}>
-                <Text style={[styles.pnl, isPositive ? styles.pnlPositive : styles.pnlNegative]}>
-                    {formatPnl(pnl)}
-                </Text>
-                <View style={styles.miniAvatarStack}>
-                    <View style={[styles.miniAvatar, { backgroundColor: '#3b82f6', zIndex: 3 }]} />
-                    <View style={[styles.miniAvatar, { backgroundColor: '#10b981', zIndex: 2, marginLeft: -6 }]} />
-                    <Text style={styles.miniAvatarCount}>+14</Text>
+                    <Text style={styles.displayName} numberOfLines={1}>
+                        {profile.display_name || profile.username || "..."}
+                    </Text>
+                </View>
+
+                <MetricItem icon={UserPlus} value={tradesCount} width={49} />
+                <MetricItem icon={Flame} value={`${Math.round(winRate)}`} width={48} />
+
+                <View style={styles.pnlCol}>
+                    <Text
+                        style={[
+                            styles.pnl,
+                            isPositive ? styles.pnlPositive : styles.pnlNegative,
+                        ]}
+                        numberOfLines={1}
+                    >
+                        {pnlParts?.whole ?? "..."}
+                    </Text>
+                    {pnlParts?.decimal ? (
+                        <Text
+                            style={[
+                                styles.pnlDecimal,
+                                isPositive ? styles.pnlPositiveDecimal : styles.pnlNegativeDecimal,
+                            ]}
+                        >
+                            {pnlParts.decimal}
+                        </Text>
+                    ) : null}
                 </View>
             </View>
         </Pressable>
     );
 }
+
 
 export default function LeaderboardScreen() {
     const router = useRouter();
@@ -107,7 +163,7 @@ export default function LeaderboardScreen() {
             try {
                 const { data, error: err } = await supabase
                     .from("profiles")
-                    .select("id, wallet_address, username, display_name, avatar_url, pnl, win_rate")
+                    .select("id, wallet_address, username, display_name, avatar_url, pnl, win_rate, trades_count")
                     .order("pnl", { ascending: false });
 
                 if (cancelled) return;
@@ -179,86 +235,96 @@ export default function LeaderboardScreen() {
         [tab, profiles, followingIds]
     );
 
-    const renderHeader = () => (
-        <>
-            <View style={styles.header}>
-                <View style={styles.logoContainer}>
-                    <Image
-                        source={require("../../../assets/app-logo.png")}
-                        style={styles.logoImage}
-                        contentFit="contain"
-                    />
-                </View>
-                <Text style={styles.headerTitle}>Leaderboard</Text>
-                <Pressable style={styles.giftIconButton} hitSlop={12}>
-                    <Gift color="#fff" size={20} strokeWidth={2.5} />
-                </Pressable>
-            </View>
+    const renderHeader = () => {
+        const pnlParts = myPnl != null ? formatPnlParts(myPnl) : null;
+        return (
+            <>
+                <View style={styles.topCard}>
+                    <View style={styles.titleRow}>
+                        <Text style={styles.title}>Leaderboard</Text>
+                        <Pressable style={styles.bellButton}>
+                            <Bell size={20} color="#8d8d8d" strokeWidth={1.8} />
+                        </Pressable>
+                    </View>
 
-            <View style={styles.tabs}>
-                <Pressable
-                    style={[styles.tab, tab === "Friends" && styles.tabActive]}
-                    onPress={() => setTab("Friends")}
-                >
-                    <Text style={[styles.tabText, tab === "Friends" && styles.tabTextActive]}>
-                        Friends
-                    </Text>
-                </Pressable>
-                <Pressable
-                    style={[styles.tab, tab === "All" && styles.tabActive]}
-                    onPress={() => setTab("All")}
-                >
-                    <Text style={[styles.tabText, tab === "All" && styles.tabTextActive]}>All</Text>
-                </Pressable>
-            </View>
-
-            <View style={styles.yourRankCard}>
-                <View style={styles.yourRankTop}>
-                    <BarChart3 color="#6b7280" size={16} strokeWidth={2.5} />
-                    <Text style={styles.yourRankLabel}>Your rank</Text>
-                </View>
-                <View style={styles.yourRankContent}>
-                    <View style={styles.yourRankProfile}>
-                        {myProfile?.avatar_url ? (
-                            <Image
-                                source={{ uri: myProfile.avatar_url }}
-                                style={styles.yourRankAvatar}
-                                contentFit="cover"
-                            />
-                        ) : (
-                            <View style={styles.yourRankAvatarPlaceholder}>
-                                <User color="#6b7280" size={16} />
+                    <View style={styles.yourRankContent}>
+                        <View style={styles.yourRankLeft}>
+                            <View style={styles.yourRankAvatarWrap}>
+                                {myProfile?.avatar_url ? (
+                                    <Image
+                                        source={{ uri: myProfile.avatar_url }}
+                                        style={styles.yourRankAvatar}
+                                    />
+                                ) : (
+                                    <View style={styles.yourRankAvatarPlaceholder}>
+                                        <User color="#52525b" size={24} strokeWidth={2} />
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.yourRankTextCol}>
+                                <Text style={styles.yourRankLabel}>Rank</Text>
+                                <Text style={styles.yourRankNumber}>
+                                    {myRank != null ? formatRank(myRank) : "—"}
+                                </Text>
+                            </View>
+                        </View>
+                        {pnlParts && (
+                            <View style={styles.yourRankPnlWrap}>
+                                <Text
+                                    style={[
+                                        styles.yourRankPnl,
+                                        myPnl! >= 0 ? styles.pnlPositive : styles.pnlNegative,
+                                    ]}
+                                >
+                                    {pnlParts.whole}
+                                </Text>
+                                {pnlParts.decimal ? (
+                                    <Text
+                                        style={[
+                                            styles.yourRankPnlDecimal,
+                                            myPnl! >= 0 ? styles.pnlPositiveDecimal : styles.pnlNegativeDecimal,
+                                        ]}
+                                    >
+                                        {pnlParts.decimal}
+                                    </Text>
+                                ) : null}
                             </View>
                         )}
-                        <Text style={styles.yourRankNumber}>
-                            {myRank != null ? `#${myRank.toLocaleString()}` : "—"}
-                        </Text>
                     </View>
-                    {myPnl != null && (
-                        <Text
-                            style={[
-                                styles.yourRankPnl,
-                                myPnl >= 0 ? styles.pnlPositive : styles.pnlNegative,
-                            ]}
-                        >
-                            {formatPnl(myPnl)}
-                        </Text>
-                    )}
                 </View>
-            </View>
 
-            <View style={styles.listHeader}>
-                <Text style={styles.listHeaderText}>Rank</Text>
-                <Text style={[styles.listHeaderText, styles.listHeaderRight]}>PnL</Text>
-            </View>
-        </>
-    );
+                <View style={styles.tabsWrapper}>
+                    <View style={styles.tabsPillContainer}>
+                        <Pressable
+                            style={[styles.tabPill, tab === "All" ? styles.tabActive : styles.tabInactive]}
+                            onPress={() => setTab("All")}
+                        >
+                            <Flame size={20} color={tab === "All" ? "#3b82f7" : "rgba(0,0,0,0.4)"} strokeWidth={2} />
+                            <Text style={[styles.tabText, tab === "All" && styles.tabTextActive]} numberOfLines={1}>
+                                All
+                            </Text>
+                        </Pressable>
+                        <Pressable
+                            style={[styles.tabPill, tab === "Friends" ? styles.tabActive : styles.tabInactive]}
+                            onPress={() => setTab("Friends")}
+                        >
+                            <Bitcoin size={20} color={tab === "Friends" ? "#3b82f7" : "rgba(0,0,0,0.4)"} strokeWidth={2} />
+                            <Text style={[styles.tabText, tab === "Friends" && styles.tabTextActive]} numberOfLines={1}>
+                                Following
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
+            <StatusBar style="dark" />
             {loading ? (
                 <View style={styles.centered}>
-                    <ActivityIndicator size="large" color="#a855f7" />
+                    <ActivityIndicator size="large" color="#3b82f7" />
                 </View>
             ) : error ? (
                 <View style={styles.centered}>
@@ -297,10 +363,11 @@ export default function LeaderboardScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#000",
+        backgroundColor: "#f0f0f0",
     },
     centered: {
         flex: 1,
+        backgroundColor: "#f5f5f5",
         justifyContent: "center",
         alignItems: "center",
     },
@@ -308,247 +375,271 @@ const styles = StyleSheet.create({
         color: "#ef4444",
         fontSize: 15,
     },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    logoContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: "#000",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-    },
-    logoImage: {
-        width: "100%",
-        height: "100%",
-    },
-    giftIconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: "#111",
+    topCard: {
+        backgroundColor: "#fff",
+        borderRadius: 24,
+        borderCurve: "continuous",
         borderWidth: 1,
-        borderColor: "#222",
+        borderColor: "rgba(0, 0, 0, 0.08)",
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 14,
+        marginBottom: 8,
+    },
+    titleRow: {
+        height: 42,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    title: {
+        color: "#171717",
+        fontSize: 24,
+        lineHeight: 32,
+        fontWeight: "700",
+        letterSpacing: -0.6,
+    },
+    bellButton: {
+        width: 28,
+        height: 28,
         alignItems: "center",
         justifyContent: "center",
     },
-    headerTitle: {
-        color: "#fff",
-        fontSize: 18,
-        fontWeight: "bold",
+    tabsWrapper: {
+        paddingHorizontal: 0, // List container already has 14px padding
+        paddingVertical: 4,
+        marginTop: 0,
+        opacity: 1,
+        alignItems: "center",
+        width: "100%",
     },
-    headerRight: {
+    tabsPillContainer: {
         flexDirection: "row",
+        alignItems: "center",
         gap: 8,
     },
-    headerIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: "#111",
-        borderWidth: 1,
-        borderColor: "#222",
+    tabPill: {
+        flex: 1,
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-    },
-    tabs: {
-        flexDirection: "row",
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        gap: 24,
-    },
-    tab: {
-        paddingBottom: 10,
-        borderBottomWidth: 2,
-        borderBottomColor: "transparent",
+        gap: 4,
+        height: 30,
+        paddingLeft: 5,
+        paddingRight: 10,
+        borderRadius: 32,
+        borderCurve: "continuous",
     },
     tabActive: {
-        borderBottomColor: "#fff",
+        backgroundColor: "rgba(59, 130, 247, 0.15)",
+    },
+    tabInactive: {
+        backgroundColor: "rgba(0, 0, 0, 0.05)",
     },
     tabText: {
-        color: "#6b7280",
-        fontSize: 18,
-        fontWeight: "800",
+        color: "rgba(0, 0, 0, 0.4)",
+        fontSize: 14,
+        lineHeight: 16,
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
+        textAlign: "left",
     },
     tabTextActive: {
-        color: "#fff",
-    },
-    yourRankCard: {
-        marginHorizontal: 16,
-        marginTop: 20,
-        padding: 16,
-        backgroundColor: "#111",
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: "#222",
-    },
-    yourRankTop: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 12,
-    },
-    yourRankLabel: {
-        color: "#fff",
-        fontSize: 14,
-        fontWeight: "800",
+        color: "#3b82f7",
+        fontWeight: "500",
     },
     yourRankContent: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+        marginTop: 8,
     },
-    yourRankProfile: {
+    yourRankLeft: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: 8,
+    },
+    yourRankTextCol: {
+        gap: 8,
+    },
+    yourRankLabel: {
+        color: "rgba(0, 0, 0, 0.4)",
+        fontSize: 14,
+        fontWeight: "600",
+        lineHeight: 16,
+    },
+    yourRankAvatarWrap: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        borderCurve: "continuous",
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: "rgba(0, 0, 0, 0.08)",
     },
     yourRankAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        borderCurve: "continuous",
     },
     yourRankAvatarPlaceholder: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: "#222",
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        borderCurve: "continuous",
+        backgroundColor: "rgba(0, 0, 0, 0.05)",
+        borderWidth: 1,
+        borderColor: "rgba(0, 0, 0, 0.08)",
         alignItems: "center",
         justifyContent: "center",
     },
     yourRankNumber: {
-        color: "#fff",
+        color: "#171717",
         fontSize: 20,
-        fontWeight: "900",
+        lineHeight: 24,
+        fontWeight: "500",
+    },
+    yourRankPnlWrap: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 88,
     },
     yourRankPnl: {
         fontSize: 20,
-        fontWeight: "900",
+        lineHeight: 24,
+        fontWeight: "500",
     },
-    listHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: 16,
-        paddingTop: 20,
-        paddingBottom: 8,
-    },
-    listHeaderText: {
-        color: "#6b7280",
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    listHeaderRight: {
-        marginRight: 60,
+    yourRankPnlDecimal: {
+        fontSize: 20,
+        lineHeight: 24,
+        fontWeight: "500",
     },
     listContent: {
+        paddingHorizontal: 14,
+        paddingTop: 8,
         paddingBottom: 24,
     },
     row: {
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        gap: 12,
+        height: 44,
+        paddingHorizontal: 12,
+        backgroundColor: "#fff",
+        borderBottomWidth: 1,
+        borderBottomColor: "rgba(0,0,0,0.05)",
     },
     rowPressed: {
         opacity: 0.7,
     },
     rankBadgeCell: {
         width: 32,
+    },
+    rankContent: {
+        flexDirection: "row",
         alignItems: "center",
+        gap: 4,
     },
     rankBadge: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 14,
+        height: 14,
         alignItems: "center",
         justifyContent: "center",
     },
     rankText: {
-        color: "#6b7280",
+        color: "rgba(0, 0, 0, 0.8)",
         fontSize: 14,
-        fontWeight: "800",
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
     },
-    rankTextDark: {
-        color: "#1a1a1a",
+    rowMainContent: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+    },
+    userInfo: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        width: 96,
     },
     avatarWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 20,
+        height: 20,
+        borderRadius: 41,
         overflow: "hidden",
+        backgroundColor: "rgba(230,230,230,0.35)",
     },
     avatar: {
-        width: 40,
-        height: 40,
+        width: 20,
+        height: 20,
     },
     avatarPlaceholder: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: "#222",
+        width: 20,
+        height: 20,
         alignItems: "center",
         justifyContent: "center",
     },
-    nameCol: {
-        flex: 1,
-        minWidth: 0,
-    },
     displayName: {
-        color: "#fff",
-        fontSize: 15,
-        fontWeight: "600",
+        color: "rgba(0, 0, 0, 0.8)",
+        fontSize: 14,
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
+        flex: 1,
     },
-    handle: {
-        color: "#6b7280",
-        fontSize: 13,
-        marginTop: 2,
-    },
-    pnlCol: {
-        alignItems: "flex-end",
+    metricItem: {
+        flexDirection: "row",
+        alignItems: "center",
         gap: 4,
     },
+    metricValue: {
+        color: "rgba(0, 0, 0, 0.8)",
+        fontSize: 14,
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
+    },
+    pnlCol: {
+        flexDirection: "row",
+        alignItems: "baseline",
+        justifyContent: "flex-end",
+        width: 78,
+    },
     pnl: {
-        fontSize: 16,
-        fontWeight: "900",
-        textAlign: "right",
+        fontSize: 14,
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
+        lineHeight: 20,
+    },
+    pnlDecimal: {
+        fontSize: 14,
+        fontWeight: "500",
+        fontFamily: "Geist-Medium",
+        lineHeight: 20,
     },
     pnlPositive: {
-        color: "#22c55e",
+        color: "rgba(0, 0, 0, 0.8)", // Figma shows pnl in same color as others in this specific node
+    },
+    pnlPositiveDecimal: {
+        color: "rgba(0, 0, 0, 0.4)",
     },
     pnlNegative: {
         color: "#ef4444",
     },
-    miniAvatarStack: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
-    miniAvatar: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: "#000",
-    },
-    miniAvatarCount: {
-        color: "#6b7280",
-        fontSize: 11,
-        fontWeight: "700",
-        marginLeft: 4,
+    pnlNegativeDecimal: {
+        color: "rgba(239, 68, 68, 0.5)",
     },
     empty: {
-        paddingVertical: 40,
+        paddingVertical: 80,
         alignItems: "center",
+        backgroundColor: "#f5f5f5",
     },
     emptyText: {
-        color: "#6b7280",
+        color: "rgba(0, 0, 0, 0.4)",
         fontSize: 15,
+        lineHeight: 22,
+        textAlign: "center",
     },
 });
